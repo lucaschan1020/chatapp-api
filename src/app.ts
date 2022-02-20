@@ -1,5 +1,6 @@
 import express from 'express';
 import http from 'http';
+import path from 'path';
 import { Server } from 'socket.io';
 
 const app = express();
@@ -12,21 +13,21 @@ const io = new Server(server, {
 });
 const serverPort: number = 5000;
 
-app.get('/', function (req, res) {
-  res.send('index.html');
-});
-
-//Whenever someone connects this gets executed
 io.on('connection', (socket) => {
   socket.on('SendChatMessage', (chatContent: string) => {
     socket.broadcast.emit('SendChatMessage', chatContent);
   });
   console.log('A user connected');
 
-  //Whenever someone disconnects this piece of code executed
   socket.on('disconnect', () => {
     console.log('A user disconnected');
   });
+});
+
+app.use('/', express.static(__dirname + '/public'));
+
+app.get('*', function (req, res) {
+  res.sendFile(path.resolve(__dirname, './public/index.html'));
 });
 
 server.listen(serverPort, function () {
