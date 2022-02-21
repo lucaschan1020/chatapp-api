@@ -30,6 +30,6 @@ app.get('*', function (req, res) {
   res.sendFile(path.resolve(__dirname, './public/index.html'));
 });
 
-server.listen(serverPort, function () {
-  console.log(`listening on *:${serverPort}`);
+server.listen(process.env.PORT || serverPort, function () {
+  console.log(`listening on *:${process.env.PORT || serverPort}`);
 });
