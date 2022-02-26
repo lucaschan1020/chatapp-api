@@ -1,12 +1,21 @@
+import cors from 'cors';
 import 'dotenv/config';
 import express from 'express';
 import http from 'http';
 import path from 'path';
 import { Server } from 'socket.io';
 import client from './database';
+import authRoutes from './routes/auth';
 
 const app = express();
 const server = new http.Server(app);
+app.use(
+  cors({
+    origin: 'http://localhost:3000',
+  })
+);
+app.use(express.json());
+
 const io = new Server(server, {
   cors: {
     origin: 'http://localhost:3000',
@@ -34,7 +43,9 @@ io.on('connection', (socket) => {
 
 app.use('/', express.static(__dirname + '/public'));
 
-app.get('*', function (req, res) {
+app.use('/api/auth', authRoutes);
+
+app.get('*', function (_req, res) {
   res.sendFile(path.resolve(__dirname, './public/index.html'));
 });
 
