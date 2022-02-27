@@ -4,7 +4,6 @@ import express from 'express';
 import http from 'http';
 import path from 'path';
 import { Server } from 'socket.io';
-import client from './database';
 import authRoutes from './routes/auth';
 
 const app = express();
@@ -23,12 +22,6 @@ const io = new Server(server, {
   },
 });
 const serverPort: number = 5000;
-
-client.connect(async (err) => {
-  console.log('connected to database');
-  await client.close();
-  console.log('disconnected from database');
-});
 
 io.on('connection', (socket) => {
   socket.on('SendChatMessage', (chatContent: string) => {
