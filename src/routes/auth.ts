@@ -49,6 +49,7 @@ router.post('/login', async (req: LoginRequestBody, res) => {
       },
       {
         upsert: true,
+        projection: { _id: 0 },
       }
     );
   } catch (e) {
