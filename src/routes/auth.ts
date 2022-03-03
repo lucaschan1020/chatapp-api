@@ -8,7 +8,7 @@ import { User } from '../database/schema';
 
 const router = express.Router();
 
-interface LoginRequestBody {
+interface LoginRequestBody extends express.Request {
   body: { userToken: string };
 }
 
