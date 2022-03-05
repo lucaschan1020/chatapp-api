@@ -5,6 +5,7 @@ import http from 'http';
 import path from 'path';
 import { Server } from 'socket.io';
 import authRoutes from './routes/auth';
+import friendRoutes from './routes/friend';
 
 const app = express();
 const server = new http.Server(app);
@@ -37,6 +38,7 @@ io.on('connection', (socket) => {
 app.use('/', express.static(__dirname + '/public'));
 
 app.use('/api/auth', authRoutes);
+app.use('/api/friend', friendRoutes);
 
 app.get('*', function (_req, res) {
   res.sendFile(path.resolve(__dirname, './public/index.html'));
