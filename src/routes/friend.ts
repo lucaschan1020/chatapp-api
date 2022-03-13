@@ -100,8 +100,7 @@ router.post(
   async (req: AddFriendRequest, res: AuthorizedResponse) => {
     const { username, discriminator } = req.params;
     const currentUser = res.locals.currentUser;
-    let toBeFriend: WithId<User> | null = null;
-    let isRequested = false;
+    let returnFriendDetail: FriendDetail | null = null;
     if (!username || !discriminator) {
       return res.status(httpConstants.HTTP_STATUS_BAD_REQUEST).json({
         message: 'Missing username or discriminator',
@@ -128,22 +127,22 @@ router.post(
       const userCollection = await mongoClient
         .db(process.env.MONGODBNAME)
         .collection<User>('users');
-      toBeFriend = await userCollection.findOne({
+      let targetFriend = await userCollection.findOne({
         username: username,
         discriminator: parseInt(discriminator),
       });
 
-      if (!toBeFriend) {
+      if (!targetFriend) {
         return res.status(httpConstants.HTTP_STATUS_NOT_FOUND).json({
           message: 'User not found',
         });
       }
 
       const userFriendship = currentUser.friends.find((friend) =>
-        friend.friend_id.equals(toBeFriend!._id)
+        friend.friend_id.equals(targetFriend!._id)
       );
 
-      const targetFriendship = toBeFriend.friends.find((friend) =>
+      const targetFriendship = targetFriend.friends.find((friend) =>
         friend.friend_id.equals(currentUser._id!)
       );
 
@@ -174,7 +173,7 @@ router.post(
 
         const friendUpdateResult = await userCollection.updateOne(
           {
-            _id: toBeFriend._id,
+            _id: targetFriend._id,
             'friends.friend_id': currentUser._id,
             'friends.friendship_status': FriendshipEnum.Pending,
           },
@@ -190,7 +189,7 @@ router.post(
         const currentUserUpdateResult = await userCollection.updateOne(
           {
             _id: currentUser._id,
-            'friends.friend_id': toBeFriend._id,
+            'friends.friend_id': targetFriend._id,
             'friends.friendship_status': FriendshipEnum.Requested,
           },
           { $set: { 'friends.$.friendship_status': FriendshipEnum.Friend } }
@@ -202,14 +201,20 @@ router.post(
           });
         }
 
-        isRequested = true;
+        returnFriendDetail = {
+          _id: targetFriend._id,
+          friendship_status: FriendshipEnum.Friend,
+          avatar: targetFriend.avatar,
+          username: targetFriend.username,
+          discriminator: targetFriend.discriminator,
+        };
       } else {
         await userCollection.findOneAndUpdate(
           { _id: currentUser._id },
           {
             $push: {
               friends: {
-                friend_id: toBeFriend._id,
+                friend_id: targetFriend._id,
                 friendship_status: FriendshipEnum.Pending,
               },
             },
@@ -217,7 +222,7 @@ router.post(
         );
 
         await userCollection.findOneAndUpdate(
-          { _id: toBeFriend._id },
+          { _id: targetFriend._id },
           {
             $push: {
               friends: {
@@ -227,6 +232,14 @@ router.post(
             },
           }
         );
+
+        returnFriendDetail = {
+          _id: targetFriend._id,
+          friendship_status: FriendshipEnum.Pending,
+          avatar: targetFriend.avatar,
+          username: targetFriend.username,
+          discriminator: targetFriend.discriminator,
+        };
       }
     } catch (e) {
       console.log(e);
@@ -236,16 +249,10 @@ router.post(
     } finally {
       await mongoClient.close();
     }
-    const newFriend: FriendDetail = {
-      _id: toBeFriend._id,
-      friendship_status: isRequested
-        ? FriendshipEnum.Friend
-        : FriendshipEnum.Pending,
-      avatar: toBeFriend.avatar,
-      username: toBeFriend.username,
-      discriminator: toBeFriend.discriminator,
-    };
-    return res.status(httpConstants.HTTP_STATUS_CREATED).json(newFriend);
+
+    return res
+      .status(httpConstants.HTTP_STATUS_CREATED)
+      .json(returnFriendDetail);
   }
 );
 
@@ -256,6 +263,7 @@ router.put(
     const currentUser = res.locals.currentUser;
     const { username, discriminator } = req.params;
     const { friendship_status } = req.body;
+    let returnFriendDetail: FriendDetail | null = null;
 
     if (!username || !discriminator) {
       return res.status(httpConstants.HTTP_STATUS_BAD_REQUEST).json({
@@ -310,11 +318,11 @@ router.put(
         });
       }
 
-      if (friendship_status === FriendshipEnum.Friend) {
-        const userFriendship = currentUser.friends.find((friend) =>
-          friend.friend_id.equals(targetFriend._id)
-        );
+      const userFriendship = currentUser.friends.find((friend) =>
+        friend.friend_id.equals(targetFriend._id)
+      );
 
+      if (friendship_status === FriendshipEnum.Friend) {
         if (!userFriendship) {
           return res.status(httpConstants.HTTP_STATUS_CONFLICT).json({
             message: 'Friendship is not established',
@@ -369,13 +377,17 @@ router.put(
             message: 'Failed to update your friendship status',
           });
         }
+
+        returnFriendDetail = {
+          _id: targetFriend._id,
+          friendship_status: FriendshipEnum.Friend,
+          avatar: targetFriend.avatar,
+          username: targetFriend.username,
+          discriminator: targetFriend.discriminator,
+        };
       }
 
       if (friendship_status === FriendshipEnum.Blocked) {
-        const userFriendship = currentUser.friends.find((friend) =>
-          friend.friend_id.equals(targetFriend._id)
-        );
-
         if (userFriendship?.friendship_status === FriendshipEnum.Blocked) {
           return res.status(httpConstants.HTTP_STATUS_CONFLICT).json({
             message: 'Failed to update friend friendship status',
@@ -422,6 +434,14 @@ router.put(
             });
           }
         }
+
+        returnFriendDetail = {
+          _id: targetFriend._id,
+          friendship_status: FriendshipEnum.Blocked,
+          avatar: targetFriend.avatar,
+          username: targetFriend.username,
+          discriminator: targetFriend.discriminator,
+        };
       }
     } catch (e) {
       console.log(e);
@@ -431,7 +451,7 @@ router.put(
     } finally {
       await mongoClient.close();
     }
-    return res.status(httpConstants.HTTP_STATUS_NO_CONTENT).json();
+    return res.status(httpConstants.HTTP_STATUS_OK).json(returnFriendDetail);
   }
 );
 
@@ -441,6 +461,7 @@ router.delete(
   async (req: DeleteFriendRequest, res: AuthorizedResponse) => {
     const currentUser = res.locals.currentUser;
     const { username, discriminator } = req.params;
+    let returnId = '';
 
     if (!username || !discriminator) {
       return res.status(httpConstants.HTTP_STATUS_BAD_REQUEST).json({
@@ -479,6 +500,8 @@ router.delete(
           message: 'User not found',
         });
       }
+
+      returnId = targetFriend._id.toString();
 
       const userFriendship = currentUser.friends.find((friend) =>
         friend.friend_id.equals(targetFriend._id)
@@ -574,7 +597,7 @@ router.delete(
       await mongoClient.close();
     }
 
-    return res.status(httpConstants.HTTP_STATUS_NO_CONTENT).json();
+    return res.status(httpConstants.HTTP_STATUS_OK).json(returnId);
   }
 );
 
