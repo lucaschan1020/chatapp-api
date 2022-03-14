@@ -4,21 +4,23 @@ export interface User {
   _id?: ObjectId;
   sub: string;
   email: string;
-  email_verified: boolean;
+  emailVerified: boolean;
   name: string;
   avatar: string;
-  given_name: string;
-  family_name: string;
+  givenName: string;
+  familyName: string;
   locale: string;
   username: string;
   discriminator: number;
-  register_time: Date;
+  registerTime: Date;
   friends: Friend[];
+  activePrivateChannels: ObjectId[];
+  joinedPrivateChannels: ObjectId[];
 }
 
 export interface Friend {
-  friend_id: ObjectId;
-  friendship_status: FriendshipEnum;
+  friendId: ObjectId;
+  friendshipStatus: FriendshipEnum;
 }
 
 export enum FriendshipEnum {
@@ -26,4 +28,25 @@ export enum FriendshipEnum {
   Requested,
   Friend,
   Blocked,
+}
+
+export interface PrivateChannel {
+  _id?: ObjectId;
+  privateChannelName: string;
+  dateCreated: Date;
+  isGroup: boolean;
+}
+
+export interface ChatBucket {
+  _id?: ObjectId;
+  channelId: ObjectId;
+  startDateTime: Date;
+  endDateTime: Date;
+  chatMessages: ChatMessage[];
+}
+
+export interface ChatMessage {
+  timestamp: Date;
+  senderId: ObjectId;
+  content: string;
 }

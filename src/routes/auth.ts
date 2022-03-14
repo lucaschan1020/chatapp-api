@@ -69,21 +69,23 @@ router.post('/login', async (req: LoginRequest, res: express.Response) => {
     result = await userCollection.insertOne({
       sub: decodedToken.sub,
       email: decodedToken.email!,
-      email_verified: decodedToken.email_verified!,
+      emailVerified: decodedToken.email_verified!,
       name: decodedToken.name!,
       avatar: decodedToken.picture!,
-      given_name: decodedToken.given_name!,
-      family_name: decodedToken.family_name!,
+      givenName: decodedToken.given_name!,
+      familyName: decodedToken.family_name!,
       locale: decodedToken.locale!,
       username: decodedToken.name!,
       discriminator: toBeDiscriminator,
-      register_time: new Date(),
+      registerTime: new Date(),
       friends: [],
+      activePrivateChannels: [],
+      joinedPrivateChannels: [],
     });
 
     result = await userCollection.findOne(
       { _id: result.insertedId },
-      { projection: { register_time: 0 } }
+      { projection: { registerTime: 0 } }
     );
   } catch (e) {
     console.log(e);
@@ -104,11 +106,11 @@ router.get(
       _id: res.locals.currentUser._id,
       sub: res.locals.currentUser.sub,
       email: res.locals.currentUser.email!,
-      email_verified: res.locals.currentUser.email_verified!,
+      emailVerified: res.locals.currentUser.emailVerified!,
       name: res.locals.currentUser.name,
       avatar: res.locals.currentUser.avatar,
-      given_name: res.locals.currentUser.given_name,
-      family_name: res.locals.currentUser.family_name,
+      givenName: res.locals.currentUser.givenName,
+      familyName: res.locals.currentUser.familyName,
       locale: res.locals.currentUser.locale,
       username: res.locals.currentUser.name,
       discriminator: res.locals.currentUser.discriminator,

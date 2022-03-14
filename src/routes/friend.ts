@@ -2,7 +2,7 @@ import express from 'express';
 import { constants as httpConstants } from 'http2';
 import { ObjectId, WithId } from 'mongodb';
 import mongoClient from '../database';
-import { FriendshipEnum, User } from '../database/schema';
+import { FriendshipEnum, PrivateChannel, User } from '../database/schema';
 import Authorize, {
   AuthorizedResponse,
 } from '../middleware/authorization-middleware';
@@ -17,7 +17,7 @@ interface AddFriendRequest extends express.Request {
 
 interface FriendDetail {
   _id?: ObjectId;
-  friendship_status?: FriendshipEnum;
+  friendshipStatus?: FriendshipEnum;
   avatar?: string;
   username?: string;
   discriminator?: number;
@@ -29,7 +29,7 @@ interface UpdateFriendRequest extends express.Request {
     discriminator: string;
   };
   body: {
-    friendship_status: FriendshipEnum;
+    friendshipStatus: FriendshipEnum;
   };
 }
 
@@ -48,7 +48,7 @@ router.get(
     if (!friends) {
       friends = [];
     }
-    const friendIds = friends.map((friend) => friend.friend_id);
+    const friendIds = friends.map((friend) => friend.friendId);
     let friendResult: WithId<User>[] | null = null;
     try {
       await mongoClient.connect();
@@ -73,8 +73,8 @@ router.get(
 
     friends.forEach(
       (friend) =>
-        (friendList[friend.friend_id.toString()] = {
-          friendship_status: friend.friendship_status,
+        (friendList[friend.friendId.toString()] = {
+          friendshipStatus: friend.friendshipStatus,
         })
     );
 
@@ -139,11 +139,11 @@ router.post(
       }
 
       const userFriendship = currentUser.friends.find((friend) =>
-        friend.friend_id.equals(targetFriend!._id)
+        friend.friendId.equals(targetFriend!._id)
       );
 
       const targetFriendship = targetFriend.friends.find((friend) =>
-        friend.friend_id.equals(currentUser._id!)
+        friend.friendId.equals(currentUser._id!)
       );
 
       if (userFriendship || targetFriendship) {
@@ -159,13 +159,13 @@ router.post(
           });
         }
 
-        if (userFriendship.friendship_status !== FriendshipEnum.Requested) {
+        if (userFriendship.friendshipStatus !== FriendshipEnum.Requested) {
           return res.status(httpConstants.HTTP_STATUS_CONFLICT).json({
             message: 'Failed to update friend friendship status',
           });
         }
 
-        if (targetFriendship.friendship_status !== FriendshipEnum.Pending) {
+        if (targetFriendship.friendshipStatus !== FriendshipEnum.Pending) {
           return res.status(httpConstants.HTTP_STATUS_CONFLICT).json({
             message: 'Failed to update friend friendship status',
           });
@@ -174,10 +174,10 @@ router.post(
         const friendUpdateResult = await userCollection.updateOne(
           {
             _id: targetFriend._id,
-            'friends.friend_id': currentUser._id,
-            'friends.friendship_status': FriendshipEnum.Pending,
+            'friends.friendId': currentUser._id,
+            'friends.friendshipStatus': FriendshipEnum.Pending,
           },
-          { $set: { 'friends.$.friendship_status': FriendshipEnum.Friend } }
+          { $set: { 'friends.$.friendshipStatus': FriendshipEnum.Friend } }
         );
 
         if (friendUpdateResult.modifiedCount === 0) {
@@ -189,10 +189,10 @@ router.post(
         const currentUserUpdateResult = await userCollection.updateOne(
           {
             _id: currentUser._id,
-            'friends.friend_id': targetFriend._id,
-            'friends.friendship_status': FriendshipEnum.Requested,
+            'friends.friendId': targetFriend._id,
+            'friends.friendshipStatus': FriendshipEnum.Requested,
           },
-          { $set: { 'friends.$.friendship_status': FriendshipEnum.Friend } }
+          { $set: { 'friends.$.friendshipStatus': FriendshipEnum.Friend } }
         );
 
         if (currentUserUpdateResult.modifiedCount === 0) {
@@ -203,7 +203,7 @@ router.post(
 
         returnFriendDetail = {
           _id: targetFriend._id,
-          friendship_status: FriendshipEnum.Friend,
+          friendshipStatus: FriendshipEnum.Friend,
           avatar: targetFriend.avatar,
           username: targetFriend.username,
           discriminator: targetFriend.discriminator,
@@ -214,8 +214,8 @@ router.post(
           {
             $push: {
               friends: {
-                friend_id: targetFriend._id,
-                friendship_status: FriendshipEnum.Pending,
+                friendId: targetFriend._id,
+                friendshipStatus: FriendshipEnum.Pending,
               },
             },
           }
@@ -226,8 +226,8 @@ router.post(
           {
             $push: {
               friends: {
-                friend_id: currentUser._id!,
-                friendship_status: FriendshipEnum.Requested,
+                friendId: currentUser._id!,
+                friendshipStatus: FriendshipEnum.Requested,
               },
             },
           }
@@ -235,7 +235,7 @@ router.post(
 
         returnFriendDetail = {
           _id: targetFriend._id,
-          friendship_status: FriendshipEnum.Pending,
+          friendshipStatus: FriendshipEnum.Pending,
           avatar: targetFriend.avatar,
           username: targetFriend.username,
           discriminator: targetFriend.discriminator,
@@ -262,7 +262,7 @@ router.put(
   async (req: UpdateFriendRequest, res: AuthorizedResponse) => {
     const currentUser = res.locals.currentUser;
     const { username, discriminator } = req.params;
-    const { friendship_status } = req.body;
+    const { friendshipStatus } = req.body;
     let returnFriendDetail: FriendDetail | null = null;
 
     if (!username || !discriminator) {
@@ -286,15 +286,15 @@ router.put(
       });
     }
 
-    if (!friendship_status && friendship_status !== FriendshipEnum.Pending) {
+    if (!friendshipStatus && friendshipStatus !== FriendshipEnum.Pending) {
       return res.status(httpConstants.HTTP_STATUS_BAD_REQUEST).json({
         message: 'Missing friendship status',
       });
     }
 
     if (
-      friendship_status !== FriendshipEnum.Friend &&
-      friendship_status !== FriendshipEnum.Blocked
+      friendshipStatus !== FriendshipEnum.Friend &&
+      friendshipStatus !== FriendshipEnum.Blocked
     ) {
       return res.status(httpConstants.HTTP_STATUS_BAD_REQUEST).json({
         message: 'Friendship status out of range',
@@ -319,10 +319,10 @@ router.put(
       }
 
       const userFriendship = currentUser.friends.find((friend) =>
-        friend.friend_id.equals(targetFriend._id)
+        friend.friendId.equals(targetFriend._id)
       );
 
-      if (friendship_status === FriendshipEnum.Friend) {
+      if (friendshipStatus === FriendshipEnum.Friend) {
         if (!userFriendship) {
           return res.status(httpConstants.HTTP_STATUS_CONFLICT).json({
             message: 'Friendship is not established',
@@ -330,7 +330,7 @@ router.put(
         }
 
         const targetFriendship = targetFriend.friends.find((friend) =>
-          friend.friend_id.equals(currentUser._id!)
+          friend.friendId.equals(currentUser._id!)
         );
 
         if (!targetFriendship) {
@@ -340,8 +340,8 @@ router.put(
         }
 
         if (
-          userFriendship.friendship_status !== FriendshipEnum.Requested ||
-          targetFriendship.friendship_status !== FriendshipEnum.Pending
+          userFriendship.friendshipStatus !== FriendshipEnum.Requested ||
+          targetFriendship.friendshipStatus !== FriendshipEnum.Pending
         ) {
           return res.status(httpConstants.HTTP_STATUS_CONFLICT).json({
             message: 'Failed to update friend friendship status',
@@ -351,10 +351,10 @@ router.put(
         const friendUpdateResult = await userCollection.updateOne(
           {
             _id: targetFriend._id,
-            'friends.friend_id': currentUser._id,
-            'friends.friendship_status': FriendshipEnum.Pending,
+            'friends.friendId': currentUser._id,
+            'friends.friendshipStatus': FriendshipEnum.Pending,
           },
-          { $set: { 'friends.$.friendship_status': FriendshipEnum.Friend } }
+          { $set: { 'friends.$.friendshipStatus': FriendshipEnum.Friend } }
         );
 
         if (friendUpdateResult.modifiedCount === 0) {
@@ -366,10 +366,10 @@ router.put(
         const currentUserUpdateResult = await userCollection.updateOne(
           {
             _id: currentUser._id,
-            'friends.friend_id': targetFriend._id,
-            'friends.friendship_status': FriendshipEnum.Requested,
+            'friends.friendId': targetFriend._id,
+            'friends.friendshipStatus': FriendshipEnum.Requested,
           },
-          { $set: { 'friends.$.friendship_status': FriendshipEnum.Friend } }
+          { $set: { 'friends.$.friendshipStatus': FriendshipEnum.Friend } }
         );
 
         if (currentUserUpdateResult.modifiedCount === 0) {
@@ -380,15 +380,15 @@ router.put(
 
         returnFriendDetail = {
           _id: targetFriend._id,
-          friendship_status: FriendshipEnum.Friend,
+          friendshipStatus: FriendshipEnum.Friend,
           avatar: targetFriend.avatar,
           username: targetFriend.username,
           discriminator: targetFriend.discriminator,
         };
       }
 
-      if (friendship_status === FriendshipEnum.Blocked) {
-        if (userFriendship?.friendship_status === FriendshipEnum.Blocked) {
+      if (friendshipStatus === FriendshipEnum.Blocked) {
+        if (userFriendship?.friendshipStatus === FriendshipEnum.Blocked) {
           return res.status(httpConstants.HTTP_STATUS_CONFLICT).json({
             message: 'Failed to update friend friendship status',
           });
@@ -397,9 +397,9 @@ router.put(
         const currentUserUpdateResult = await userCollection.updateOne(
           {
             _id: currentUser._id,
-            'friends.friend_id': targetFriend._id,
+            'friends.friendId': targetFriend._id,
           },
-          { $set: { 'friends.$.friendship_status': FriendshipEnum.Blocked } }
+          { $set: { 'friends.$.friendshipStatus': FriendshipEnum.Blocked } }
         );
 
         if (currentUserUpdateResult.modifiedCount === 0) {
@@ -408,8 +408,8 @@ router.put(
             {
               $push: {
                 friends: {
-                  friend_id: targetFriend._id!,
-                  friendship_status: FriendshipEnum.Blocked,
+                  friendId: targetFriend._id!,
+                  friendshipStatus: FriendshipEnum.Blocked,
                 },
               },
             }
@@ -417,15 +417,15 @@ router.put(
         }
 
         const targetFriendship = targetFriend.friends.find((friend) =>
-          friend.friend_id.equals(currentUser._id!)
+          friend.friendId.equals(currentUser._id!)
         );
 
-        if (targetFriendship?.friendship_status !== FriendshipEnum.Blocked) {
+        if (targetFriendship?.friendshipStatus !== FriendshipEnum.Blocked) {
           const friendUpdateResult = await userCollection.updateOne(
             {
               _id: targetFriend._id,
             },
-            { $pull: { friends: { friend_id: currentUser._id } } }
+            { $pull: { friends: { friendId: currentUser._id } } }
           );
 
           if (friendUpdateResult.modifiedCount === 0) {
@@ -437,7 +437,7 @@ router.put(
 
         returnFriendDetail = {
           _id: targetFriend._id,
-          friendship_status: FriendshipEnum.Blocked,
+          friendshipStatus: FriendshipEnum.Blocked,
           avatar: targetFriend.avatar,
           username: targetFriend.username,
           discriminator: targetFriend.discriminator,
@@ -504,7 +504,7 @@ router.delete(
       returnId = targetFriend._id.toString();
 
       const userFriendship = currentUser.friends.find((friend) =>
-        friend.friend_id.equals(targetFriend._id)
+        friend.friendId.equals(targetFriend._id)
       );
 
       if (!userFriendship) {
@@ -514,18 +514,18 @@ router.delete(
       }
 
       const targetFriendship = targetFriend.friends.find((friend) =>
-        friend.friend_id.equals(currentUser._id!)
+        friend.friendId.equals(currentUser._id!)
       );
 
       if (
-        userFriendship.friendship_status === FriendshipEnum.Pending &&
-        targetFriendship?.friendship_status === FriendshipEnum.Requested
+        userFriendship.friendshipStatus === FriendshipEnum.Pending &&
+        targetFriendship?.friendshipStatus === FriendshipEnum.Requested
       ) {
         const friendUpdateResult = await userCollection.updateOne(
           {
             _id: targetFriend._id,
           },
-          { $pull: { friends: { friend_id: currentUser._id } } }
+          { $pull: { friends: { friendId: currentUser._id } } }
         );
 
         if (friendUpdateResult.modifiedCount === 0) {
@@ -535,28 +535,28 @@ router.delete(
         }
       }
 
-      if (userFriendship.friendship_status === FriendshipEnum.Requested) {
+      if (userFriendship.friendshipStatus === FriendshipEnum.Requested) {
         if (!targetFriendship) {
           return res.status(httpConstants.HTTP_STATUS_CONFLICT).json({
             message: 'Friendship is not established',
           });
         }
 
-        if (targetFriendship.friendship_status !== FriendshipEnum.Pending) {
+        if (targetFriendship.friendshipStatus !== FriendshipEnum.Pending) {
           return res.status(httpConstants.HTTP_STATUS_CONFLICT).json({
             message: 'Failed to update friend friendship status',
           });
         }
       }
 
-      if (userFriendship.friendship_status === FriendshipEnum.Friend) {
+      if (userFriendship.friendshipStatus === FriendshipEnum.Friend) {
         if (!targetFriendship) {
           return res.status(httpConstants.HTTP_STATUS_CONFLICT).json({
             message: 'Friendship is not established',
           });
         }
 
-        if (targetFriendship.friendship_status !== FriendshipEnum.Friend) {
+        if (targetFriendship.friendshipStatus !== FriendshipEnum.Friend) {
           return res.status(httpConstants.HTTP_STATUS_CONFLICT).json({
             message: 'Failed to update friend friendship status',
           });
@@ -566,7 +566,7 @@ router.delete(
           {
             _id: targetFriend._id,
           },
-          { $pull: { friends: { friend_id: currentUser._id } } }
+          { $pull: { friends: { friendId: currentUser._id } } }
         );
 
         if (friendUpdateResult.modifiedCount === 0) {
@@ -580,7 +580,7 @@ router.delete(
         {
           _id: currentUser._id,
         },
-        { $pull: { friends: { friend_id: targetFriend._id } } }
+        { $pull: { friends: { friendId: targetFriend._id } } }
       );
 
       if (currentUserUpdateResult.modifiedCount === 0) {
