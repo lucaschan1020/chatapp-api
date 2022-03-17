@@ -1,7 +1,6 @@
 import { ObjectId } from 'mongodb';
 
 export interface User {
-  _id?: ObjectId;
   sub: string;
   email: string;
   emailVerified: boolean;
@@ -13,14 +12,15 @@ export interface User {
   username: string;
   discriminator: number;
   registerTime: Date;
-  friends: Friend[];
+  friends: Record<string, Friend>;
   activePrivateChannels: ObjectId[];
-  joinedPrivateChannels: ObjectId[];
+  joinedGroupPrivateChannels: ObjectId[];
 }
 
 export interface Friend {
   friendId: ObjectId;
-  friendshipStatus: FriendshipEnum;
+  friendshipStatus?: FriendshipEnum;
+  privateChannelId: ObjectId;
 }
 
 export enum FriendshipEnum {
@@ -31,14 +31,12 @@ export enum FriendshipEnum {
 }
 
 export interface PrivateChannel {
-  _id?: ObjectId;
   privateChannelName: string;
   dateCreated: Date;
   isGroup: boolean;
 }
 
 export interface ChatBucket {
-  _id?: ObjectId;
   channelId: ObjectId;
   startDateTime: Date;
   endDateTime: Date;

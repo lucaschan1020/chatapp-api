@@ -8,7 +8,7 @@ import { User } from '../database/schema';
 
 interface AuthorizedResponse extends express.Response {
   locals: {
-    currentUser: User;
+    currentUser: WithId<User>;
   };
 }
 

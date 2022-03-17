@@ -50,10 +50,13 @@ router.post('/login', async (req: LoginRequest, res: express.Response) => {
     let toBeDiscriminator: number = 0;
     for (let index = 0; index < 10; index++) {
       toBeDiscriminator = Math.floor(Math.random() * 9999) + 1;
-      const found = await userCollection.countDocuments({
-        username: decodedToken.name,
-        discriminator: toBeDiscriminator,
-      });
+      const found = await userCollection.countDocuments(
+        {
+          username: decodedToken.name,
+          discriminator: toBeDiscriminator,
+        },
+        { limit: 1 }
+      );
       if (found === 0) {
         break;
       }
@@ -78,9 +81,9 @@ router.post('/login', async (req: LoginRequest, res: express.Response) => {
       username: decodedToken.name!,
       discriminator: toBeDiscriminator,
       registerTime: new Date(),
-      friends: [],
+      friends: {},
       activePrivateChannels: [],
-      joinedPrivateChannels: [],
+      joinedGroupPrivateChannels: [],
     });
 
     result = await userCollection.findOne(
