@@ -41,10 +41,18 @@ export interface ChatBucket {
   startDateTime: Date;
   endDateTime: Date;
   chatMessages: ChatMessage[];
+  bucketId: number;
 }
 
 export interface ChatMessage {
   timestamp: Date;
   senderId: ObjectId;
-  content: string;
+  // previousContent: PreviousChatMessageContent[];
+  content: string | null;
+  lastModified: Date;
 }
+
+// export interface PreviousChatMessageContent {
+//   timestamp: Date;
+//   content: string;
+// }

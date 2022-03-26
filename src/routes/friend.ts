@@ -1,8 +1,8 @@
 import express from 'express';
 import { constants as httpConstants } from 'http2';
-import { WithId } from 'mongodb';
+import { InsertOneResult, WithId } from 'mongodb';
 import mongoClient from '../database';
-import { FriendshipEnum, User } from '../database/schema';
+import { FriendshipEnum, PrivateChannel, User } from '../database/schema';
 import Authorize, {
   AuthorizedResponse,
 } from '../middleware/authorization-middleware';
@@ -137,6 +137,10 @@ router.post(
       const userCollection = await mongoClient
         .db(process.env.MONGODBNAME)
         .collection<User>('users');
+      const privateChannelCollection = await mongoClient
+        .db(process.env.MONGODBNAME)
+        .collection<PrivateChannel>('privateChannels');
+
       const targetFriend = await userCollection.findOne({
         username: username,
         discriminator: parseInt(discriminator),
@@ -149,7 +153,6 @@ router.post(
       }
 
       const userFriendship = currentUser.friends[targetFriend._id.toString()];
-
       const targetFriendship = targetFriend.friends[currentUser._id.toString()];
 
       if (
@@ -180,14 +183,111 @@ router.post(
           });
         }
 
+        let newPrivateChannel: InsertOneResult<PrivateChannel> | null = null;
+        if (
+          !userFriendship.privateChannelId ||
+          !targetFriendship.privateChannelId
+        ) {
+          const createdDate = new Date();
+          newPrivateChannel = await privateChannelCollection.insertOne({
+            privateChannelName: '',
+            dateCreated: createdDate,
+            isGroup: false,
+          });
+        }
+
+        const updatedCurrentUser = await userCollection.findOneAndUpdate(
+          { _id: currentUser._id },
+          [
+            {
+              $set: {
+                [`friends.${targetFriend._id.toString()}.friendshipStatus`]:
+                  FriendshipEnum.Friend,
+                [`friends.${targetFriend._id.toString()}.privateChannelId`]: {
+                  $cond: [
+                    {
+                      $not: [
+                        `$friends.${targetFriend._id.toString()}.privateChannelId`,
+                      ],
+                    },
+                    newPrivateChannel?.insertedId,
+                    `$friends.${targetFriend._id.toString()}.privateChannelId`,
+                  ],
+                },
+              },
+            },
+          ],
+          {
+            returnDocument: 'after',
+          }
+        );
+
+        await userCollection.findOneAndUpdate(
+          { _id: currentUser._id },
+          {
+            $addToSet: {
+              activePrivateChannels:
+                updatedCurrentUser.value?.friends[targetFriend._id.toString()]
+                  .privateChannelId,
+            },
+          }
+        );
+
+        const updatedTargetFriend = await userCollection.findOneAndUpdate(
+          { _id: targetFriend._id },
+          [
+            {
+              $set: {
+                [`friends.${currentUser._id.toString()}.friendshipStatus`]:
+                  FriendshipEnum.Friend,
+                [`friends.${currentUser._id.toString()}.privateChannelId`]: {
+                  $cond: [
+                    {
+                      $not: [
+                        `$friends.${currentUser._id.toString()}.privateChannelId`,
+                      ],
+                    },
+                    newPrivateChannel?.insertedId,
+                    `$friends.${currentUser._id.toString()}.privateChannelId`,
+                  ],
+                },
+              },
+            },
+          ],
+          {
+            returnDocument: 'after',
+          }
+        );
+
+        await userCollection.findOneAndUpdate(
+          { _id: targetFriend._id },
+          {
+            $addToSet: {
+              activePrivateChannels:
+                updatedTargetFriend.value?.friends[currentUser._id.toString()]
+                  .privateChannelId,
+            },
+          }
+        );
+
+        returnFriendDetail = {
+          _id: targetFriend._id,
+          friendshipStatus: FriendshipEnum.Friend,
+          avatar: targetFriend.avatar,
+          username: targetFriend.username,
+          discriminator: targetFriend.discriminator,
+        };
+      } else {
         const friendUpdateResult = await userCollection.updateOne(
           {
             _id: targetFriend._id,
           },
           {
             $set: {
+              [`friends.${currentUser._id.toString()}.friendId`]:
+                currentUser._id.toString(),
               [`friends.${currentUser._id.toString()}.friendshipStatus`]:
-                FriendshipEnum.Friend,
+                FriendshipEnum.Requested,
             },
           }
         );
@@ -204,8 +304,10 @@ router.post(
           },
           {
             $set: {
+              [`friends.${targetFriend._id.toString()}.friendId`]:
+                targetFriend._id.toString(),
               [`friends.${targetFriend._id.toString()}.friendshipStatus`]:
-                FriendshipEnum.Friend,
+                FriendshipEnum.Pending,
             },
           }
         );
@@ -215,38 +317,6 @@ router.post(
             message: 'Failed to update your friendship status',
           });
         }
-
-        returnFriendDetail = {
-          _id: targetFriend._id,
-          friendshipStatus: FriendshipEnum.Friend,
-          avatar: targetFriend.avatar,
-          username: targetFriend.username,
-          discriminator: targetFriend.discriminator,
-        };
-      } else {
-        await userCollection.findOneAndUpdate(
-          { _id: currentUser._id },
-          {
-            $set: {
-              [`friends.${targetFriend._id.toString()}.friendId`]:
-                targetFriend._id,
-              [`friends.${targetFriend._id.toString()}.friendshipStatus`]:
-                FriendshipEnum.Pending,
-            },
-          }
-        );
-
-        await userCollection.findOneAndUpdate(
-          { _id: targetFriend._id },
-          {
-            $set: {
-              [`friends.${currentUser._id.toString()}.friendId`]:
-                currentUser._id,
-              [`friends.${currentUser._id.toString()}.friendshipStatus`]:
-                FriendshipEnum.Requested,
-            },
-          }
-        );
 
         returnFriendDetail = {
           _id: targetFriend._id,
@@ -322,6 +392,9 @@ router.put(
       const userCollection = await mongoClient
         .db(process.env.MONGODBNAME)
         .collection<User>('users');
+      const privateChannelCollection = await mongoClient
+        .db(process.env.MONGODBNAME)
+        .collection<PrivateChannel>('privateChannels');
 
       const targetFriend = await userCollection.findOne({
         username: username,
@@ -335,6 +408,7 @@ router.put(
       }
 
       const userFriendship = currentUser.friends[targetFriend._id.toString()];
+      const targetFriendship = targetFriend.friends[currentUser._id.toString()];
 
       if (friendshipStatus === FriendshipEnum.Friend) {
         if (!userFriendship || userFriendship.friendshipStatus === null) {
@@ -342,9 +416,6 @@ router.put(
             message: 'Friendship is not established',
           });
         }
-
-        const targetFriendship =
-          targetFriend.friends[currentUser._id.toString()];
 
         if (!targetFriendship || targetFriendship.friendshipStatus === null) {
           return res.status(httpConstants.HTTP_STATUS_CONFLICT).json({
@@ -361,41 +432,92 @@ router.put(
           });
         }
 
-        const friendUpdateResult = await userCollection.updateOne(
+        let newPrivateChannel: InsertOneResult<PrivateChannel> | null = null;
+        if (
+          !userFriendship.privateChannelId ||
+          !targetFriendship.privateChannelId
+        ) {
+          const createdDate = new Date();
+          newPrivateChannel = await privateChannelCollection.insertOne({
+            privateChannelName: '',
+            dateCreated: createdDate,
+            isGroup: false,
+          });
+        }
+
+        const updatedCurrentUser = await userCollection.findOneAndUpdate(
+          { _id: currentUser._id },
+          [
+            {
+              $set: {
+                [`friends.${targetFriend._id.toString()}.friendshipStatus`]:
+                  FriendshipEnum.Friend,
+                [`friends.${targetFriend._id.toString()}.privateChannelId`]: {
+                  $cond: [
+                    {
+                      $not: [
+                        `$friends.${targetFriend._id.toString()}.privateChannelId`,
+                      ],
+                    },
+                    newPrivateChannel?.insertedId,
+                    `$friends.${targetFriend._id.toString()}.privateChannelId`,
+                  ],
+                },
+              },
+            },
+          ],
           {
-            _id: targetFriend._id,
-          },
+            returnDocument: 'after',
+          }
+        );
+
+        await userCollection.findOneAndUpdate(
+          { _id: currentUser._id },
           {
-            $set: {
-              [`friends.${currentUser._id.toString()}.friendshipStatus`]:
-                FriendshipEnum.Friend,
+            $addToSet: {
+              activePrivateChannels:
+                updatedCurrentUser.value?.friends[targetFriend._id.toString()]
+                  .privateChannelId,
             },
           }
         );
 
-        if (friendUpdateResult.modifiedCount === 0) {
-          return res.status(httpConstants.HTTP_STATUS_CONFLICT).json({
-            message: 'Failed to update friend friendship status',
-          });
-        }
-
-        const currentUserUpdateResult = await userCollection.updateOne(
-          {
-            _id: currentUser._id,
-          },
-          {
-            $set: {
-              [`friends.${targetFriend._id.toString()}.friendshipStatus`]:
-                FriendshipEnum.Friend,
+        const updatedTargetFriend = await userCollection.findOneAndUpdate(
+          { _id: targetFriend._id },
+          [
+            {
+              $set: {
+                [`friends.${currentUser._id.toString()}.friendshipStatus`]:
+                  FriendshipEnum.Friend,
+                [`friends.${currentUser._id.toString()}.privateChannelId`]: {
+                  $cond: [
+                    {
+                      $not: [
+                        `$friends.${currentUser._id.toString()}.privateChannelId`,
+                      ],
+                    },
+                    newPrivateChannel?.insertedId,
+                    `$friends.${currentUser._id.toString()}.privateChannelId`,
+                  ],
+                },
+              },
             },
+          ],
+          {
+            returnDocument: 'after',
           }
         );
 
-        if (currentUserUpdateResult.modifiedCount === 0) {
-          return res.status(httpConstants.HTTP_STATUS_CONFLICT).json({
-            message: 'Failed to update your friendship status',
-          });
-        }
+        await userCollection.findOneAndUpdate(
+          { _id: targetFriend._id },
+          {
+            $addToSet: {
+              activePrivateChannels:
+                updatedTargetFriend.value?.friends[currentUser._id.toString()]
+                  .privateChannelId,
+            },
+          }
+        );
 
         returnFriendDetail = {
           _id: targetFriend._id,
@@ -432,9 +554,6 @@ router.put(
             message: 'Failed to update your friendship status',
           });
         }
-
-        const targetFriendship =
-          targetFriend.friends[currentUser._id.toString()];
 
         if (targetFriendship?.friendshipStatus !== FriendshipEnum.Blocked) {
           const friendUpdateResult = await userCollection.updateOne(
