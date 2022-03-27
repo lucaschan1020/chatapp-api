@@ -19,7 +19,7 @@ export interface User {
 
 export interface Friend {
   friendId: ObjectId;
-  friendshipStatus?: FriendshipEnum;
+  friendshipStatus?: FriendshipEnum | null;
   privateChannelId: ObjectId;
   active: boolean;
 }

@@ -196,3 +196,5 @@ router.get(
     return res.status(httpConstants.HTTP_STATUS_OK).json(chatBucket);
   }
 );
+
+export default router;

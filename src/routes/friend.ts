@@ -16,7 +16,7 @@ interface AddFriendRequest extends express.Request {
 }
 
 interface FriendDetail {
-  friendshipStatus: FriendshipEnum;
+  friendshipStatus: FriendshipEnum | null;
   avatar: string;
   username: string;
   discriminator: number;
@@ -43,10 +43,7 @@ router.get(
   '',
   Authorize,
   async (req: express.Request, res: AuthorizedResponse) => {
-    let friends = res.locals.currentUser.friends;
-    if (!friends) {
-      friends = {};
-    }
+    const friends = res.locals.currentUser.friends;
     const friendIds = Object.values(friends)
       .filter((friend) => {
         if (friend.friendshipStatus === null) return false;
