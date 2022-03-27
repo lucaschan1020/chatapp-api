@@ -214,22 +214,12 @@ router.post(
                     `$friends.${targetFriend._id.toString()}.privateChannelId`,
                   ],
                 },
+                [`friends.${targetFriend._id.toString()}.active`]: true,
               },
             },
           ],
           {
             returnDocument: 'after',
-          }
-        );
-
-        await userCollection.findOneAndUpdate(
-          { _id: currentUser._id },
-          {
-            $addToSet: {
-              activePrivateChannels:
-                updatedCurrentUser.value?.friends[targetFriend._id.toString()]
-                  .privateChannelId,
-            },
           }
         );
 
@@ -251,22 +241,12 @@ router.post(
                     `$friends.${currentUser._id.toString()}.privateChannelId`,
                   ],
                 },
+                [`friends.${currentUser._id.toString()}.active`]: true,
               },
             },
           ],
           {
             returnDocument: 'after',
-          }
-        );
-
-        await userCollection.findOneAndUpdate(
-          { _id: targetFriend._id },
-          {
-            $addToSet: {
-              activePrivateChannels:
-                updatedTargetFriend.value?.friends[currentUser._id.toString()]
-                  .privateChannelId,
-            },
           }
         );
 
@@ -463,22 +443,12 @@ router.put(
                     `$friends.${targetFriend._id.toString()}.privateChannelId`,
                   ],
                 },
+                [`friends.${targetFriend._id.toString()}.active`]: true,
               },
             },
           ],
           {
             returnDocument: 'after',
-          }
-        );
-
-        await userCollection.findOneAndUpdate(
-          { _id: currentUser._id },
-          {
-            $addToSet: {
-              activePrivateChannels:
-                updatedCurrentUser.value?.friends[targetFriend._id.toString()]
-                  .privateChannelId,
-            },
           }
         );
 
@@ -500,22 +470,12 @@ router.put(
                     `$friends.${currentUser._id.toString()}.privateChannelId`,
                   ],
                 },
+                [`friends.${currentUser._id.toString()}.active`]: true,
               },
             },
           ],
           {
             returnDocument: 'after',
-          }
-        );
-
-        await userCollection.findOneAndUpdate(
-          { _id: targetFriend._id },
-          {
-            $addToSet: {
-              activePrivateChannels:
-                updatedTargetFriend.value?.friends[currentUser._id.toString()]
-                  .privateChannelId,
-            },
           }
         );
 

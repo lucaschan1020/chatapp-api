@@ -82,7 +82,6 @@ router.post('/login', async (req: LoginRequest, res: express.Response) => {
       discriminator: toBeDiscriminator,
       registerTime: new Date(),
       friends: {},
-      activePrivateChannels: [],
       joinedGroupPrivateChannels: [],
     });
 

@@ -13,7 +13,7 @@ export interface User {
   discriminator: number;
   registerTime: Date;
   friends: Record<string, Friend>;
-  activePrivateChannels: ObjectId[];
+  // activePrivateChannels: ObjectId[];
   joinedGroupPrivateChannels: ObjectId[];
 }
 
@@ -21,6 +21,7 @@ export interface Friend {
   friendId: ObjectId;
   friendshipStatus?: FriendshipEnum;
   privateChannelId: ObjectId;
+  active: boolean;
 }
 
 export enum FriendshipEnum {
