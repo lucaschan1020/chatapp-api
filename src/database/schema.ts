@@ -20,8 +20,8 @@ export interface User {
 export interface Friend {
   friendId: ObjectId;
   friendshipStatus?: FriendshipEnum | null;
-  privateChannelId: ObjectId;
-  active: boolean;
+  privateChannelId?: ObjectId;
+  active?: boolean;
 }
 
 export enum FriendshipEnum {

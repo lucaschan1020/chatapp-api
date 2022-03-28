@@ -75,7 +75,7 @@ router.get(
             groupPrivateChannel.equals(privateChannelId)
           )
         : Object.values(currentUser.friends).some((friend) =>
-            friend.privateChannelId.equals(privateChannelId)
+            friend.privateChannelId?.equals(privateChannelId)
           );
 
       if (!isJoined) {
@@ -146,7 +146,7 @@ router.get(
             groupPrivateChannel.equals(privateChannelId)
           )
         : Object.values(currentUser.friends).some((friend) =>
-            friend.privateChannelId.equals(privateChannelId)
+            friend.privateChannelId?.equals(privateChannelId)
           );
 
       if (!isJoined) {

@@ -15,7 +15,7 @@ interface AddFriendRequest extends express.Request {
   };
 }
 
-interface FriendDetail {
+interface FriendResponse {
   friendshipStatus: FriendshipEnum | null;
   avatar: string;
   username: string;
@@ -77,7 +77,7 @@ router.get(
     } finally {
       await mongoClient.close();
     }
-    let friendList = {} as Record<string, Partial<WithId<FriendDetail>>>;
+    let friendList = {} as Record<string, Partial<WithId<FriendResponse>>>;
     Object.values(friends).forEach((friend) => {
       if (friend.friendshipStatus == null) return;
       friendList[friend.friendId.toString()] = {
@@ -107,7 +107,7 @@ router.post(
   async (req: AddFriendRequest, res: AuthorizedResponse) => {
     const { username, discriminator } = req.params;
     const currentUser = res.locals.currentUser;
-    let returnFriendDetail: WithId<FriendDetail> | null = null;
+    let returnFriendDetail: WithId<FriendResponse> | null = null;
     if (!username || !discriminator) {
       return res.status(httpConstants.HTTP_STATUS_BAD_REQUEST).json({
         message: 'Missing username or discriminator',
@@ -325,7 +325,7 @@ router.put(
     const currentUser = res.locals.currentUser;
     const { username, discriminator } = req.params;
     const { friendshipStatus } = req.body;
-    let returnFriendDetail: WithId<FriendDetail> | null = null;
+    let returnFriendDetail: WithId<FriendResponse> | null = null;
 
     if (!username || !discriminator) {
       return res.status(httpConstants.HTTP_STATUS_BAD_REQUEST).json({

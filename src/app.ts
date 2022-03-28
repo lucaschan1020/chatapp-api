@@ -6,6 +6,8 @@ import path from 'path';
 import { Server } from 'socket.io';
 import authRoutes from './routes/auth';
 import friendRoutes from './routes/friend';
+import privateChannelRoutes from './routes/privateChannel';
+import chatRoutes from './routes/chat';
 
 const app = express();
 const server = new http.Server(app);
@@ -39,6 +41,8 @@ app.use('/', express.static(__dirname + '/public'));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/friend', friendRoutes);
+app.use('/api/privateChannel', privateChannelRoutes);
+app.use('/api/chat', chatRoutes);
 
 app.get('*', function (_req, res) {
   res.sendFile(path.resolve(__dirname, './public/index.html'));
