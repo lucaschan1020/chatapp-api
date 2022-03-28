@@ -258,7 +258,10 @@ router.post(
         await userCollection.updateMany(
           {
             _id: {
-              $in: participants.map((particant) => new ObjectId(particant)),
+              $in: [
+                ...participants.map((participant) => new ObjectId(participant)),
+                currentUser._id,
+              ],
             },
           },
           {
@@ -272,10 +275,7 @@ router.post(
       friendResult = await userCollection
         .find({
           _id: {
-            $in: [
-              ...participants.map((participant) => new ObjectId(participant)),
-              currentUser._id,
-            ],
+            $in: participants.map((participant) => new ObjectId(participant)),
           },
         })
         .toArray();
