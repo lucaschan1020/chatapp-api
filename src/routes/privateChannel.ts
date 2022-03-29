@@ -316,7 +316,7 @@ router.post(
     };
 
     return res
-      .status(httpConstants.HTTP_STATUS_OK)
+      .status(httpConstants.HTTP_STATUS_CREATED)
       .json(privateChannelResponse);
   }
 );
