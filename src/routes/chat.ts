@@ -6,6 +6,7 @@ import { ChatBucket, ChatMessage, PrivateChannel } from '../database/schema';
 import Authorize, {
   AuthorizedResponse,
 } from '../middleware/authorization-middleware';
+import { emitSendPrivateChannelChat } from '../socketIO';
 
 const router = express.Router();
 interface GetLatestPrivateChannelChatRequest extends express.Request {
@@ -30,6 +31,16 @@ interface CreatePrivateChannelChatRequest extends express.Request {
   };
 }
 
+export interface PrivateChannelChatResponse {
+  channelId: string;
+  bucketId: number;
+  chatMessages: {
+    timestamp: Date;
+    senderId: string;
+    content: string | null;
+  }[];
+}
+
 router.get(
   '/private/:privateChannelId/:bucketId',
   Authorize,
@@ -39,8 +50,7 @@ router.get(
   ) => {
     const currentUser = res.locals.currentUser;
     const { privateChannelId, bucketId } = req.params;
-    let chatBucket: WithId<ChatBucket> | null;
-
+    let privateChannelChatResponse: PrivateChannelChatResponse;
     if (!privateChannelId) {
       return res.status(httpConstants.HTTP_STATUS_BAD_REQUEST).json({
         message: 'Missing privateChannelId',
@@ -93,16 +103,26 @@ router.get(
         });
       }
 
-      chatBucket = await chatBucketCollection.findOne({
+      const chatBucketResult = await chatBucketCollection.findOne({
         channelId: new ObjectId(privateChannelId),
         bucketId: parseInt(bucketId),
       });
 
-      if (!chatBucket) {
+      if (!chatBucketResult) {
         return res.status(httpConstants.HTTP_STATUS_NOT_FOUND).json({
           message: 'Chat bucket not found',
         });
       }
+
+      privateChannelChatResponse = {
+        channelId: privateChannelId,
+        bucketId: parseInt(bucketId),
+        chatMessages: chatBucketResult.chatMessages.map((chatMessage) => ({
+          timestamp: chatMessage.timestamp,
+          senderId: chatMessage.senderId.toString(),
+          content: chatMessage.content,
+        })),
+      };
     } catch (e) {
       console.log(e);
       return res.status(httpConstants.HTTP_STATUS_INTERNAL_SERVER_ERROR).json({
@@ -112,7 +132,9 @@ router.get(
       await mongoClient.close();
     }
 
-    return res.status(httpConstants.HTTP_STATUS_OK).json(chatBucket);
+    return res
+      .status(httpConstants.HTTP_STATUS_OK)
+      .json(privateChannelChatResponse);
   }
 );
 
@@ -122,7 +144,7 @@ router.get(
   async (req: GetLatestPrivateChannelChatRequest, res: AuthorizedResponse) => {
     const currentUser = res.locals.currentUser;
     const privateChannelId = req.params.privateChannelId;
-    let chatBucket: WithId<ChatBucket>;
+    let privateChannelChatResponse: PrivateChannelChatResponse;
 
     if (!privateChannelId) {
       return res.status(httpConstants.HTTP_STATUS_BAD_REQUEST).json({
@@ -182,22 +204,20 @@ router.get(
           endDateTime: now,
         });
 
-        chatBucket = {
-          _id: newChatBucket.insertedId,
+        privateChannelChatResponse = {
+          channelId: privateChannelId,
           bucketId: 0,
-          channelId: new ObjectId(privateChannelId),
           chatMessages: [],
-          startDateTime: now,
-          endDateTime: now,
         };
       } else {
-        chatBucket = {
-          _id: chatBucketResult[0]._id,
+        privateChannelChatResponse = {
+          channelId: privateChannelId,
           bucketId: chatBucketResult[0].bucketId,
-          channelId: chatBucketResult[0].channelId,
-          chatMessages: chatBucketResult[0].chatMessages,
-          startDateTime: chatBucketResult[0].startDateTime,
-          endDateTime: chatBucketResult[0].endDateTime,
+          chatMessages: chatBucketResult[0].chatMessages.map((chatMessage) => ({
+            timestamp: chatMessage.timestamp,
+            senderId: chatMessage.senderId.toString(),
+            content: chatMessage.content,
+          })),
         };
       }
     } catch (e) {
@@ -209,7 +229,9 @@ router.get(
       await mongoClient.close();
     }
 
-    return res.status(httpConstants.HTTP_STATUS_OK).json(chatBucket);
+    return res
+      .status(httpConstants.HTTP_STATUS_OK)
+      .json(privateChannelChatResponse);
   }
 );
 
@@ -219,11 +241,12 @@ router.post(
   async (req: CreatePrivateChannelChatRequest, res: AuthorizedResponse) => {
     const currentUser = res.locals.currentUser;
     const privateChannelId = req.params.privateChannelId;
-    const content = req.body.content;
+    const content = req.body.content.trim();
     const now = new Date();
+    let privateChannelChatResponse: PrivateChannelChatResponse;
     const newChatMessage: ChatMessage = {
       timestamp: now,
-      senderId: new ObjectId(currentUser._id),
+      senderId: currentUser._id,
       content: content,
       lastModified: now,
     };
@@ -269,24 +292,26 @@ router.post(
         .sort({ bucketId: -1 })
         .limit(1)
         .toArray();
-
+      let bucketId = 0;
       if (chatBucketResult.length === 0) {
         await chatBucketCollection.insertOne({
-          bucketId: 0,
+          bucketId,
           channelId: new ObjectId(privateChannelId),
           chatMessages: [newChatMessage],
           startDateTime: now,
           endDateTime: now,
         });
       } else if (chatBucketResult[0].chatMessages.length > 50) {
+        bucketId = chatBucketResult[0].bucketId + 1;
         await chatBucketCollection.insertOne({
-          bucketId: chatBucketResult[0].bucketId + 1,
+          bucketId,
           channelId: new ObjectId(privateChannelId),
           chatMessages: [newChatMessage],
           startDateTime: now,
           endDateTime: now,
         });
       } else {
+        bucketId = chatBucketResult[0].bucketId;
         const insertNewChatMessage = await chatBucketCollection.updateOne(
           {
             _id: chatBucketResult[0]._id,
@@ -303,6 +328,18 @@ router.post(
           });
         }
       }
+
+      privateChannelChatResponse = {
+        channelId: privateChannelId,
+        bucketId,
+        chatMessages: [
+          {
+            timestamp: newChatMessage.timestamp,
+            senderId: newChatMessage.senderId.toString(),
+            content: newChatMessage.content,
+          },
+        ],
+      };
     } catch (e) {
       console.log(e);
       return res.status(httpConstants.HTTP_STATUS_INTERNAL_SERVER_ERROR).json({
@@ -311,7 +348,15 @@ router.post(
     } finally {
       await mongoClient.close();
     }
-    return res.status(httpConstants.HTTP_STATUS_CREATED).json(newChatMessage);
+
+    emitSendPrivateChannelChat(
+      new ObjectId(privateChannelId),
+      privateChannelChatResponse
+    );
+
+    return res
+      .status(httpConstants.HTTP_STATUS_CREATED)
+      .json(privateChannelChatResponse);
   }
 );
 

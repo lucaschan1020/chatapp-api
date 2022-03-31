@@ -3,11 +3,11 @@ import 'dotenv/config';
 import express from 'express';
 import http from 'http';
 import path from 'path';
-import { Server } from 'socket.io';
 import authRoutes from './routes/auth';
+import chatRoutes from './routes/chat';
 import friendRoutes from './routes/friend';
 import privateChannelRoutes from './routes/privateChannel';
-import chatRoutes from './routes/chat';
+import { initializeSocketIO } from './socketIO';
 
 const app = express();
 const server = new http.Server(app);
@@ -17,25 +17,8 @@ app.use(
   })
 );
 app.use(express.json());
-
-const io = new Server(server, {
-  cors: {
-    origin: 'http://localhost:3000',
-    methods: ['GET'],
-  },
-});
+initializeSocketIO(server);
 const serverPort: number = 5000;
-
-io.on('connection', (socket) => {
-  socket.on('SendChatMessage', (chatContent: string) => {
-    socket.broadcast.emit('SendChatMessage', chatContent);
-  });
-  console.log('A user connected');
-
-  socket.on('disconnect', () => {
-    console.log('A user disconnected');
-  });
-});
 
 app.use('/', express.static(__dirname + '/public'));
 

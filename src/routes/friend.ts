@@ -6,20 +6,21 @@ import { FriendshipEnum, PrivateChannel, User } from '../database/schema';
 import Authorize, {
   AuthorizedResponse,
 } from '../middleware/authorization-middleware';
+import { emitUpdateFriendshipStatus } from '../socketIO';
 const router = express.Router();
 
-interface AddFriendRequest extends express.Request {
+interface GetFriendRequest extends express.Request {
   params: {
     username: string;
     discriminator: string;
   };
 }
 
-interface FriendResponse {
-  friendshipStatus: FriendshipEnum | null;
-  avatar: string;
-  username: string;
-  discriminator: number;
+interface AddFriendRequest extends express.Request {
+  params: {
+    username: string;
+    discriminator: string;
+  };
 }
 
 interface UpdateFriendRequest extends express.Request {
@@ -38,6 +39,80 @@ interface DeleteFriendRequest extends express.Request {
     discriminator: string;
   };
 }
+
+export interface FriendResponse {
+  friendshipStatus?: FriendshipEnum | null;
+  avatar: string;
+  username: string;
+  discriminator: number;
+}
+
+router.get(
+  '/:username/:discriminator',
+  Authorize,
+  async (req: GetFriendRequest, res: AuthorizedResponse) => {
+    const { username, discriminator } = req.params;
+    const currentUser = res.locals.currentUser;
+    let friendResponse: WithId<FriendResponse> | null = null;
+    if (!username || !discriminator) {
+      return res.status(httpConstants.HTTP_STATUS_BAD_REQUEST).json({
+        message: 'Missing username or discriminator',
+      });
+    }
+
+    if (isNaN(discriminator as any)) {
+      return res.status(httpConstants.HTTP_STATUS_BAD_REQUEST).json({
+        message: 'Discriminator must be integer',
+      });
+    }
+
+    if (
+      currentUser.username === username &&
+      currentUser.discriminator === parseInt(discriminator)
+    ) {
+      return res.status(httpConstants.HTTP_STATUS_BAD_REQUEST).json({
+        message: 'Username and discriminator must be other user',
+      });
+    }
+
+    try {
+      await mongoClient.connect();
+      const userCollection = await mongoClient
+        .db(process.env.MONGODBNAME)
+        .collection<User>('users');
+
+      const targetFriend = await userCollection.findOne({
+        username: username,
+        discriminator: parseInt(discriminator),
+      });
+
+      if (!targetFriend) {
+        return res.status(httpConstants.HTTP_STATUS_NOT_FOUND).json({
+          message: 'User not found',
+        });
+      }
+
+      const userFriendship = currentUser.friends[targetFriend._id.toString()];
+
+      friendResponse = {
+        _id: targetFriend._id,
+        friendshipStatus: userFriendship.friendshipStatus || null,
+        avatar: targetFriend.avatar,
+        username: targetFriend.username,
+        discriminator: targetFriend.discriminator,
+      };
+    } catch (e) {
+      console.log(e);
+      return res.status(httpConstants.HTTP_STATUS_INTERNAL_SERVER_ERROR).json({
+        message: 'Something went wrong',
+      });
+    } finally {
+      await mongoClient.close();
+    }
+
+    return res.status(httpConstants.HTTP_STATUS_OK).json(friendResponse);
+  }
+);
 
 router.get(
   '',
@@ -101,7 +176,8 @@ router.post(
   async (req: AddFriendRequest, res: AuthorizedResponse) => {
     const { username, discriminator } = req.params;
     const currentUser = res.locals.currentUser;
-    let returnFriendDetail: WithId<FriendResponse> | null = null;
+    let currentUserFriendResponse: WithId<FriendResponse>;
+    let targetFriendResponse: WithId<FriendResponse>;
     if (!username || !discriminator) {
       return res.status(httpConstants.HTTP_STATUS_BAD_REQUEST).json({
         message: 'Missing username or discriminator',
@@ -247,12 +323,20 @@ router.post(
           }
         );
 
-        returnFriendDetail = {
+        currentUserFriendResponse = {
           _id: targetFriend._id,
           friendshipStatus: FriendshipEnum.Friend,
           avatar: targetFriend.avatar,
           username: targetFriend.username,
           discriminator: targetFriend.discriminator,
+        };
+
+        targetFriendResponse = {
+          _id: currentUser._id,
+          friendshipStatus: FriendshipEnum.Friend,
+          avatar: currentUser.avatar,
+          username: currentUser.username,
+          discriminator: currentUser.discriminator,
         };
       } else {
         const friendUpdateResult = await userCollection.updateOne(
@@ -295,12 +379,20 @@ router.post(
           });
         }
 
-        returnFriendDetail = {
+        currentUserFriendResponse = {
           _id: targetFriend._id,
           friendshipStatus: FriendshipEnum.Pending,
           avatar: targetFriend.avatar,
           username: targetFriend.username,
           discriminator: targetFriend.discriminator,
+        };
+
+        targetFriendResponse = {
+          _id: currentUser._id,
+          friendshipStatus: FriendshipEnum.Requested,
+          avatar: currentUser.avatar,
+          username: currentUser.username,
+          discriminator: currentUser.discriminator,
         };
       }
     } catch (e) {
@@ -312,9 +404,15 @@ router.post(
       await mongoClient.close();
     }
 
+    emitUpdateFriendshipStatus(currentUser._id, currentUserFriendResponse);
+    emitUpdateFriendshipStatus(
+      currentUserFriendResponse._id,
+      targetFriendResponse
+    );
+
     return res
       .status(httpConstants.HTTP_STATUS_CREATED)
-      .json(returnFriendDetail);
+      .json(currentUserFriendResponse);
   }
 );
 
@@ -325,7 +423,8 @@ router.put(
     const currentUser = res.locals.currentUser;
     const { username, discriminator } = req.params;
     const { friendshipStatus } = req.body;
-    let returnFriendDetail: WithId<FriendResponse> | null = null;
+    let currentUserFriendResponse: WithId<FriendResponse> | null = null;
+    let targetFriendResponse: WithId<FriendResponse> | null = null;
 
     if (!username || !discriminator) {
       return res.status(httpConstants.HTTP_STATUS_BAD_REQUEST).json({
@@ -476,12 +575,20 @@ router.put(
           }
         );
 
-        returnFriendDetail = {
+        currentUserFriendResponse = {
           _id: targetFriend._id,
           friendshipStatus: FriendshipEnum.Friend,
           avatar: targetFriend.avatar,
           username: targetFriend.username,
           discriminator: targetFriend.discriminator,
+        };
+
+        targetFriendResponse = {
+          _id: currentUser._id,
+          friendshipStatus: FriendshipEnum.Friend,
+          avatar: currentUser.avatar,
+          username: currentUser.username,
+          discriminator: currentUser.discriminator,
         };
       }
 
@@ -533,9 +640,17 @@ router.put(
               message: 'Failed to update your friendship status',
             });
           }
+
+          targetFriendResponse = {
+            _id: currentUser._id,
+            friendshipStatus: null,
+            avatar: currentUser.avatar,
+            username: currentUser.username,
+            discriminator: currentUser.discriminator,
+          };
         }
 
-        returnFriendDetail = {
+        currentUserFriendResponse = {
           _id: targetFriend._id,
           friendshipStatus: FriendshipEnum.Blocked,
           avatar: targetFriend.avatar,
@@ -551,7 +666,18 @@ router.put(
     } finally {
       await mongoClient.close();
     }
-    return res.status(httpConstants.HTTP_STATUS_OK).json(returnFriendDetail);
+
+    emitUpdateFriendshipStatus(currentUser._id, currentUserFriendResponse!);
+    if (targetFriendResponse !== null) {
+      emitUpdateFriendshipStatus(
+        currentUserFriendResponse!._id,
+        targetFriendResponse
+      );
+    }
+
+    return res
+      .status(httpConstants.HTTP_STATUS_OK)
+      .json(currentUserFriendResponse!);
   }
 );
 
@@ -561,6 +687,8 @@ router.delete(
   async (req: DeleteFriendRequest, res: AuthorizedResponse) => {
     const currentUser = res.locals.currentUser;
     const { username, discriminator } = req.params;
+    let currentUserFriendResponse: WithId<FriendResponse> | null = null;
+    let targetFriendResponse: WithId<FriendResponse> | null = null;
     let returnId = '';
 
     if (!username || !discriminator) {
@@ -628,6 +756,14 @@ router.delete(
           }
         );
 
+        targetFriendResponse = {
+          _id: currentUser._id,
+          friendshipStatus: null,
+          avatar: currentUser.avatar,
+          username: currentUser.username,
+          discriminator: currentUser.discriminator,
+        };
+
         if (friendUpdateResult.modifiedCount === 0) {
           return res.status(httpConstants.HTTP_STATUS_CONFLICT).json({
             message: 'Failed to update your friendship status',
@@ -678,6 +814,14 @@ router.delete(
             message: 'Failed to update your friendship status',
           });
         }
+
+        targetFriendResponse = {
+          _id: currentUser._id,
+          friendshipStatus: null,
+          avatar: currentUser.avatar,
+          username: currentUser.username,
+          discriminator: currentUser.discriminator,
+        };
       }
 
       const currentUserUpdateResult = await userCollection.updateOne(
@@ -696,6 +840,14 @@ router.delete(
           message: 'Failed to update your friendship status',
         });
       }
+
+      currentUserFriendResponse = {
+        _id: targetFriend._id,
+        friendshipStatus: null,
+        avatar: targetFriend.avatar,
+        username: targetFriend.username,
+        discriminator: targetFriend.discriminator,
+      };
     } catch (e) {
       console.log(e);
       return res.status(httpConstants.HTTP_STATUS_INTERNAL_SERVER_ERROR).json({
@@ -703,6 +855,14 @@ router.delete(
       });
     } finally {
       await mongoClient.close();
+    }
+
+    emitUpdateFriendshipStatus(currentUser._id, currentUserFriendResponse!);
+    if (targetFriendResponse !== null) {
+      emitUpdateFriendshipStatus(
+        currentUserFriendResponse!._id,
+        targetFriendResponse
+      );
     }
 
     return res.status(httpConstants.HTTP_STATUS_OK).json(returnId);

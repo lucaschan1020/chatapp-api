@@ -1,6 +1,6 @@
 import { ObjectId } from 'mongodb';
 
-export interface User {
+interface User {
   sub: string;
   email: string;
   emailVerified: boolean;
@@ -17,27 +17,27 @@ export interface User {
   joinedGroupPrivateChannels: ObjectId[];
 }
 
-export interface Friend {
+interface Friend {
   friendId: ObjectId;
   friendshipStatus?: FriendshipEnum | null;
   privateChannelId?: ObjectId;
   active?: boolean;
 }
 
-export enum FriendshipEnum {
+enum FriendshipEnum {
   Pending,
   Requested,
   Friend,
   Blocked,
 }
 
-export interface PrivateChannel {
+interface PrivateChannel {
   privateChannelName: string;
   dateCreated: Date;
   isGroup: boolean;
 }
 
-export interface ChatBucket {
+interface ChatBucket {
   channelId: ObjectId;
   startDateTime: Date;
   endDateTime: Date;
@@ -45,7 +45,7 @@ export interface ChatBucket {
   bucketId: number;
 }
 
-export interface ChatMessage {
+interface ChatMessage {
   timestamp: Date;
   senderId: ObjectId;
   // previousContent: PreviousChatMessageContent[];
@@ -57,3 +57,12 @@ export interface ChatMessage {
 //   timestamp: Date;
 //   content: string;
 // }
+
+export {
+  User,
+  Friend,
+  FriendshipEnum,
+  PrivateChannel,
+  ChatBucket,
+  ChatMessage,
+};

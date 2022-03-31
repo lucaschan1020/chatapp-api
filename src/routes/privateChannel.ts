@@ -6,14 +6,14 @@ import { FriendshipEnum, PrivateChannel, User } from '../database/schema';
 import Authorize, {
   AuthorizedResponse,
 } from '../middleware/authorization-middleware';
+import { emitNewPrivateChannel } from '../socketIO';
 import isDuplicateExist from '../utilities/isDuplicateExist';
 import isValidObjectId from '../utilities/isValidObjectId';
 
 const router = express.Router();
 
-interface PrivateChannelResponse {
+export interface PrivateChannelResponse {
   participants: {
-    friendshipStatus?: FriendshipEnum | null;
     avatar: string;
     username: string;
     discriminator: number;
@@ -99,28 +99,27 @@ router.get(
       await mongoClient.close();
     }
 
-    let privateChannelList = {} as Record<
+    let privateChannelResponse = {} as Record<
       string,
       Partial<WithId<PrivateChannelResponse>>
     >;
 
     privateChannelResult.forEach(
-      ({ _id, privateChannelName, dateCreated, isGroup }) =>
-        (privateChannelList[_id.toString()] = {
-          _id,
-          privateChannelName,
-          dateCreated,
-          isGroup,
+      (privateChannel) =>
+        (privateChannelResponse[privateChannel._id.toString()] = {
+          _id: privateChannel._id,
+          privateChannelName: privateChannel.privateChannelName,
+          dateCreated: privateChannel.dateCreated,
+          isGroup: privateChannel.isGroup,
         })
     );
 
     friendResult.forEach((friend) => {
       const friendship = friends[friend._id.toString()];
-      privateChannelList[friendship.privateChannelId!.toString()] = {
-        ...privateChannelList[friendship.privateChannelId!.toString()],
+      privateChannelResponse[friendship.privateChannelId!.toString()] = {
+        ...privateChannelResponse[friendship.privateChannelId!.toString()],
         participants: [
           {
-            friendshipStatus: friendship.friendshipStatus,
             avatar: friend.avatar,
             username: friend.username,
             discriminator: friend.discriminator,
@@ -137,22 +136,20 @@ router.get(
           )
         )
         .map((participant) => ({
-          friendshipStatus:
-            friends[participant._id.toString()] !== undefined
-              ? friends[participant._id.toString()].friendshipStatus
-              : null,
           avatar: participant.avatar,
           username: participant.username,
           discriminator: participant.discriminator,
         }));
 
-      privateChannelList[privateChannel.toString()] = {
-        ...privateChannelList[privateChannel.toString()],
+      privateChannelResponse[privateChannel.toString()] = {
+        ...privateChannelResponse[privateChannel.toString()],
         participants,
       };
     });
 
-    return res.status(httpConstants.HTTP_STATUS_OK).json(privateChannelList);
+    return res
+      .status(httpConstants.HTTP_STATUS_OK)
+      .json(privateChannelResponse);
   }
 );
 
@@ -163,7 +160,7 @@ router.post(
     const currentUser = res.locals.currentUser;
     const { participants, privateChannelName = '' } = req.body;
     let privateChannelResult: WithId<PrivateChannel> | null;
-    let friendResult: WithId<User>[];
+    let participantsResult: WithId<User>[];
     if (!participants) {
       return res.status(httpConstants.HTTP_STATUS_BAD_REQUEST).json({
         message: 'Missing participants',
@@ -244,7 +241,7 @@ router.post(
         .collection<PrivateChannel>('privateChannels');
 
       const newPrivateChannel = await privateChannelCollection.insertOne({
-        privateChannelName: isGroup ? privateChannelName : '',
+        privateChannelName: isGroup ? privateChannelName.trim() : '',
         dateCreated: new Date(),
         isGroup: isGroup,
       });
@@ -323,10 +320,13 @@ router.post(
         );
       }
 
-      friendResult = await userCollection
+      participantsResult = await userCollection
         .find({
           _id: {
-            $in: participants.map((participant) => new ObjectId(participant)),
+            $in: [
+              ...participants.map((participant) => new ObjectId(participant)),
+              currentUser._id,
+            ],
           },
         })
         .toArray();
@@ -352,19 +352,20 @@ router.post(
     }
     const privateChannelResponse: WithId<PrivateChannelResponse> = {
       _id: privateChannelResult._id,
-      participants: friendResult.map(
-        ({ _id, avatar, username, discriminator }) => ({
-          friendshipStatus:
-            currentUser.friends[_id.toString()].friendshipStatus,
-          avatar,
-          username,
-          discriminator,
-        })
-      ),
+      participants: participantsResult.map((participant) => ({
+        avatar: participant.avatar,
+        username: participant.username,
+        discriminator: participant.discriminator,
+      })),
       privateChannelName: privateChannelResult.privateChannelName,
       dateCreated: privateChannelResult.dateCreated,
       isGroup: privateChannelResult.isGroup,
     };
+
+    emitNewPrivateChannel(
+      participantsResult.map((participant) => participant._id),
+      privateChannelResponse
+    );
 
     return res
       .status(httpConstants.HTTP_STATUS_CREATED)
