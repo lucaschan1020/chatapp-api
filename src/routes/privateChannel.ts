@@ -6,6 +6,8 @@ import { FriendshipEnum, PrivateChannel, User } from '../database/schema';
 import Authorize, {
   AuthorizedResponse,
 } from '../middleware/authorization-middleware';
+import isDuplicateExist from '../utilities/isDuplicateExist';
+import isValidObjectId from '../utilities/isValidObjectId';
 
 const router = express.Router();
 
@@ -72,7 +74,9 @@ router.get(
 
       friendResult = await userCollection
         .find({
-          _id: { $in: activeFriendIds },
+          _id: {
+            $in: activeFriendIds,
+          },
         })
         .toArray();
 
@@ -80,6 +84,9 @@ router.get(
         .find({
           joinedGroupPrivateChannels: {
             $in: joinedGroupPrivateChannels,
+          },
+          _id: {
+            $ne: currentUser._id,
           },
         })
         .toArray();
@@ -107,22 +114,20 @@ router.get(
         })
     );
 
-    friendResult.forEach(
-      ({ _id, avatar, username, discriminator, friends }) => {
-        const friendship = friends[currentUser._id.toString()];
-        privateChannelList[friendship.privateChannelId!.toString()] = {
-          ...privateChannelList[friendship.privateChannelId!.toString()],
-          participants: [
-            {
-              friendshipStatus: friends[_id.toString()].friendshipStatus,
-              avatar,
-              username,
-              discriminator,
-            },
-          ],
-        };
-      }
-    );
+    friendResult.forEach((friend) => {
+      const friendship = friends[friend._id.toString()];
+      privateChannelList[friendship.privateChannelId!.toString()] = {
+        ...privateChannelList[friendship.privateChannelId!.toString()],
+        participants: [
+          {
+            friendshipStatus: friendship.friendshipStatus,
+            avatar: friend.avatar,
+            username: friend.username,
+            discriminator: friend.discriminator,
+          },
+        ],
+      };
+    });
 
     joinedGroupPrivateChannels.forEach((privateChannel) => {
       const participants = groupFriendResult
@@ -131,11 +136,14 @@ router.get(
             friendPrivateChannel.equals(privateChannel)
           )
         )
-        .map(({ _id, avatar, username, discriminator }) => ({
-          friendshipStatus: friends[_id.toString()].friendshipStatus,
-          avatar,
-          username,
-          discriminator,
+        .map((participant) => ({
+          friendshipStatus:
+            friends[participant._id.toString()] !== undefined
+              ? friends[participant._id.toString()].friendshipStatus
+              : null,
+          avatar: participant.avatar,
+          username: participant.username,
+          discriminator: participant.discriminator,
         }));
 
       privateChannelList[privateChannel.toString()] = {
@@ -144,20 +152,23 @@ router.get(
       };
     });
 
-    return res
-      .status(httpConstants.HTTP_STATUS_OK)
-      .json(Object.values(privateChannelList));
+    return res.status(httpConstants.HTTP_STATUS_OK).json(privateChannelList);
   }
 );
 
 router.post(
-  '/private',
+  '',
   Authorize,
   async (req: CreatePrivateChannelRequest, res: AuthorizedResponse) => {
     const currentUser = res.locals.currentUser;
-    const { participants, privateChannelName } = req.body;
+    const { participants, privateChannelName = '' } = req.body;
     let privateChannelResult: WithId<PrivateChannel> | null;
     let friendResult: WithId<User>[];
+    if (!participants) {
+      return res.status(httpConstants.HTTP_STATUS_BAD_REQUEST).json({
+        message: 'Missing participants',
+      });
+    }
 
     if (!Array.isArray(participants)) {
       return res.status(httpConstants.HTTP_STATUS_BAD_REQUEST).json({
@@ -170,10 +181,37 @@ router.post(
         message: 'Partcipants must be more than 0 and less than 11 members',
       });
     }
+    const isDuplicate = isDuplicateExist(participants);
+
+    if (isDuplicate) {
+      return res.status(httpConstants.HTTP_STATUS_BAD_REQUEST).json({
+        message: 'Participants cannot contains duplicate',
+      });
+    }
+
+    const isValidObjectIdFormat = participants.every((participant) =>
+      isValidObjectId(participant)
+    );
+
+    if (!isValidObjectIdFormat) {
+      return res.status(httpConstants.HTTP_STATUS_BAD_REQUEST).json({
+        message: 'The format of participants is not valid',
+      });
+    }
+
+    const isContainsSelf = participants.some((participant) =>
+      currentUser._id.equals(participant)
+    );
+
+    if (isContainsSelf) {
+      return res.status(httpConstants.HTTP_STATUS_BAD_REQUEST).json({
+        message: 'Partcipants cannot include yourself',
+      });
+    }
 
     const isGroup = participants.length > 1;
     const notFriends = participants.some((participant) => {
-      if (currentUser.friends[participant] === undefined) return false;
+      if (currentUser.friends[participant] === undefined) return true;
       return (
         currentUser.friends[participant].friendshipStatus !==
         FriendshipEnum.Friend
@@ -182,7 +220,8 @@ router.post(
 
     if (isGroup && notFriends) {
       return res.status(httpConstants.HTTP_STATUS_BAD_REQUEST).json({
-        message: 'Members must be friend when creating group private channel',
+        message:
+          'All participants must be friend when creating group private channel',
       });
     }
 
@@ -209,6 +248,18 @@ router.post(
         dateCreated: new Date(),
         isGroup: isGroup,
       });
+
+      const participantCount = await userCollection.countDocuments({
+        _id: {
+          $in: participants.map((participant) => new ObjectId(participant)),
+        },
+      });
+
+      if (participantCount !== participants.length) {
+        return res.status(httpConstants.HTTP_STATUS_NOT_FOUND).json({
+          message: 'One or more participants do not exist',
+        });
+      }
 
       if (!isGroup) {
         const friendId = participants[0];

@@ -293,6 +293,7 @@ router.post(
           },
           {
             $push: { chatMessages: newChatMessage },
+            $set: { endDateTime: now },
           }
         );
 

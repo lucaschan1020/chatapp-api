@@ -1,6 +1,6 @@
 import express from 'express';
 import { constants as httpConstants } from 'http2';
-import { InsertOneResult, WithId } from 'mongodb';
+import { InsertOneResult, ObjectId, WithId } from 'mongodb';
 import mongoClient from '../database';
 import { FriendshipEnum, PrivateChannel, User } from '../database/schema';
 import Authorize, {
@@ -57,18 +57,14 @@ router.get(
         .db(process.env.MONGODBNAME)
         .collection<User>('users');
 
-      if (friendIds === undefined) {
-        friendResult = [];
-      } else {
-        friendResult = await userCollection
-          .find(
-            {
-              _id: { $in: friendIds },
-            },
-            { projection: { avatar: 1, username: 1, discriminator: 1 } }
-          )
-          .toArray();
-      }
+      friendResult = await userCollection
+        .find(
+          {
+            _id: { $in: friendIds },
+          },
+          { projection: { avatar: 1, username: 1, discriminator: 1 } }
+        )
+        .toArray();
     } catch (e) {
       console.log(e);
       return res.status(httpConstants.HTTP_STATUS_INTERNAL_SERVER_ERROR).json({
@@ -77,17 +73,17 @@ router.get(
     } finally {
       await mongoClient.close();
     }
-    let friendList = {} as Record<string, Partial<WithId<FriendResponse>>>;
+    let friendResponse = {} as Record<string, Partial<WithId<FriendResponse>>>;
     Object.values(friends).forEach((friend) => {
       if (friend.friendshipStatus == null) return;
-      friendList[friend.friendId.toString()] = {
+      friendResponse[friend.friendId.toString()] = {
         friendshipStatus: friend.friendshipStatus,
       };
     });
 
     friendResult.forEach((friend) => {
-      friendList[friend._id.toString()] = {
-        ...friendList[friend._id.toString()],
+      friendResponse[friend._id.toString()] = {
+        ...friendResponse[friend._id.toString()],
         _id: friend._id,
         avatar: friend.avatar,
         username: friend.username,
@@ -95,9 +91,7 @@ router.get(
       };
     });
 
-    return res
-      .status(httpConstants.HTTP_STATUS_OK)
-      .json(Object.values(friendList));
+    return res.status(httpConstants.HTTP_STATUS_OK).json(friendResponse);
   }
 );
 
@@ -165,6 +159,12 @@ router.post(
         if (!targetFriendship) {
           return res.status(httpConstants.HTTP_STATUS_CONFLICT).json({
             message: 'Failed to update friend friendship status',
+          });
+        }
+
+        if (userFriendship.friendshipStatus === FriendshipEnum.Pending) {
+          return res.status(httpConstants.HTTP_STATUS_CONFLICT).json({
+            message: 'Already sent friend request',
           });
         }
 
@@ -262,7 +262,7 @@ router.post(
           {
             $set: {
               [`friends.${currentUser._id.toString()}.friendId`]:
-                currentUser._id.toString(),
+                currentUser._id,
               [`friends.${currentUser._id.toString()}.friendshipStatus`]:
                 FriendshipEnum.Requested,
             },
@@ -282,7 +282,7 @@ router.post(
           {
             $set: {
               [`friends.${targetFriend._id.toString()}.friendId`]:
-                targetFriend._id.toString(),
+                targetFriend._id,
               [`friends.${targetFriend._id.toString()}.friendshipStatus`]:
                 FriendshipEnum.Pending,
             },
@@ -512,7 +512,10 @@ router.put(
           });
         }
 
-        if (targetFriendship?.friendshipStatus !== FriendshipEnum.Blocked) {
+        if (
+          targetFriendship?.friendshipStatus !== FriendshipEnum.Blocked &&
+          targetFriendship?.friendshipStatus !== null
+        ) {
           const friendUpdateResult = await userCollection.updateOne(
             {
               _id: targetFriend._id,
