@@ -1,7 +1,7 @@
 import express from 'express';
 import { constants as httpConstants } from 'http2';
 import { InsertOneResult, ObjectId, WithId } from 'mongodb';
-import mongoClient from '../database';
+import { collections } from '../database';
 import { FriendshipEnum, PrivateChannel, User } from '../database/schema';
 import Authorize, {
   AuthorizedResponse,
@@ -76,12 +76,7 @@ router.get(
     }
 
     try {
-      await mongoClient.connect();
-      const userCollection = await mongoClient
-        .db(process.env.MONGODBNAME)
-        .collection<User>('users');
-
-      const targetFriend = await userCollection.findOne({
+      const targetFriend = await collections.users!.findOne({
         username: username,
         discriminator: parseInt(discriminator),
       });
@@ -106,8 +101,6 @@ router.get(
       return res.status(httpConstants.HTTP_STATUS_INTERNAL_SERVER_ERROR).json({
         message: 'Something went wrong',
       });
-    } finally {
-      await mongoClient.close();
     }
 
     return res.status(httpConstants.HTTP_STATUS_OK).json(friendResponse);
@@ -127,13 +120,8 @@ router.get(
       .map((friend) => friend.friendId);
     let friendResult: WithId<User>[] | null = null;
     try {
-      await mongoClient.connect();
-      const userCollection = await mongoClient
-        .db(process.env.MONGODBNAME)
-        .collection<User>('users');
-
-      friendResult = await userCollection
-        .find(
+      friendResult = await collections
+        .users!.find(
           {
             _id: { $in: friendIds },
           },
@@ -145,9 +133,8 @@ router.get(
       return res.status(httpConstants.HTTP_STATUS_INTERNAL_SERVER_ERROR).json({
         message: 'Something went wrong',
       });
-    } finally {
-      await mongoClient.close();
     }
+
     let friendResponse = {} as Record<string, Partial<WithId<FriendResponse>>>;
     Object.values(friends).forEach((friend) => {
       if (friend.friendshipStatus == null) return;
@@ -200,15 +187,7 @@ router.post(
     }
 
     try {
-      await mongoClient.connect();
-      const userCollection = await mongoClient
-        .db(process.env.MONGODBNAME)
-        .collection<User>('users');
-      const privateChannelCollection = await mongoClient
-        .db(process.env.MONGODBNAME)
-        .collection<PrivateChannel>('privateChannels');
-
-      const targetFriend = await userCollection.findOne({
+      const targetFriend = await collections.users!.findOne({
         username: username,
         discriminator: parseInt(discriminator),
       });
@@ -262,14 +241,14 @@ router.post(
           !targetFriendship.privateChannelId
         ) {
           const createdDate = new Date();
-          newPrivateChannel = await privateChannelCollection.insertOne({
+          newPrivateChannel = await collections.privateChannels!.insertOne({
             privateChannelName: '',
             dateCreated: createdDate,
             isGroup: false,
           });
         }
 
-        const updatedCurrentUser = await userCollection.findOneAndUpdate(
+        const updatedCurrentUser = await collections.users!.findOneAndUpdate(
           { _id: currentUser._id },
           [
             {
@@ -296,7 +275,7 @@ router.post(
           }
         );
 
-        const updatedTargetFriend = await userCollection.findOneAndUpdate(
+        const updatedTargetFriend = await collections.users!.findOneAndUpdate(
           { _id: targetFriend._id },
           [
             {
@@ -339,7 +318,7 @@ router.post(
           discriminator: currentUser.discriminator,
         };
       } else {
-        const friendUpdateResult = await userCollection.updateOne(
+        const friendUpdateResult = await collections.users!.updateOne(
           {
             _id: targetFriend._id,
           },
@@ -359,7 +338,7 @@ router.post(
           });
         }
 
-        const currentUserUpdateResult = await userCollection.updateOne(
+        const currentUserUpdateResult = await collections.users!.updateOne(
           {
             _id: currentUser._id,
           },
@@ -400,8 +379,6 @@ router.post(
       return res.status(httpConstants.HTTP_STATUS_INTERNAL_SERVER_ERROR).json({
         message: 'Something went wrong',
       });
-    } finally {
-      await mongoClient.close();
     }
 
     emitUpdateFriendshipStatus(currentUser._id, currentUserFriendResponse);
@@ -464,15 +441,7 @@ router.put(
     }
 
     try {
-      await mongoClient.connect();
-      const userCollection = await mongoClient
-        .db(process.env.MONGODBNAME)
-        .collection<User>('users');
-      const privateChannelCollection = await mongoClient
-        .db(process.env.MONGODBNAME)
-        .collection<PrivateChannel>('privateChannels');
-
-      const targetFriend = await userCollection.findOne({
+      const targetFriend = await collections.users!.findOne({
         username: username,
         discriminator: parseInt(discriminator),
       });
@@ -514,14 +483,14 @@ router.put(
           !targetFriendship.privateChannelId
         ) {
           const createdDate = new Date();
-          newPrivateChannel = await privateChannelCollection.insertOne({
+          newPrivateChannel = await collections.privateChannels!.insertOne({
             privateChannelName: '',
             dateCreated: createdDate,
             isGroup: false,
           });
         }
 
-        const updatedCurrentUser = await userCollection.findOneAndUpdate(
+        const updatedCurrentUser = await collections.users!.findOneAndUpdate(
           { _id: currentUser._id },
           [
             {
@@ -548,7 +517,7 @@ router.put(
           }
         );
 
-        const updatedTargetFriend = await userCollection.findOneAndUpdate(
+        const updatedTargetFriend = await collections.users!.findOneAndUpdate(
           { _id: targetFriend._id },
           [
             {
@@ -599,7 +568,7 @@ router.put(
           });
         }
 
-        const currentUserUpdateResult = await userCollection.updateOne(
+        const currentUserUpdateResult = await collections.users!.updateOne(
           {
             _id: currentUser._id,
           },
@@ -623,7 +592,7 @@ router.put(
           targetFriendship?.friendshipStatus !== FriendshipEnum.Blocked &&
           targetFriendship?.friendshipStatus !== null
         ) {
-          const friendUpdateResult = await userCollection.updateOne(
+          const friendUpdateResult = await collections.users!.updateOne(
             {
               _id: targetFriend._id,
             },
@@ -663,8 +632,6 @@ router.put(
       return res.status(httpConstants.HTTP_STATUS_INTERNAL_SERVER_ERROR).json({
         message: 'Something went wrong',
       });
-    } finally {
-      await mongoClient.close();
     }
 
     emitUpdateFriendshipStatus(currentUser._id, currentUserFriendResponse!);
@@ -713,12 +680,7 @@ router.delete(
     }
 
     try {
-      await mongoClient.connect();
-      const userCollection = await mongoClient
-        .db(process.env.MONGODBNAME)
-        .collection<User>('users');
-
-      const targetFriend = await userCollection.findOne({
+      const targetFriend = await collections.users!.findOne({
         username: username,
         discriminator: parseInt(discriminator),
       });
@@ -745,7 +707,7 @@ router.delete(
         userFriendship.friendshipStatus === FriendshipEnum.Pending &&
         targetFriendship?.friendshipStatus === FriendshipEnum.Requested
       ) {
-        const friendUpdateResult = await userCollection.updateOne(
+        const friendUpdateResult = await collections.users!.updateOne(
           {
             _id: targetFriend._id,
           },
@@ -798,7 +760,7 @@ router.delete(
           });
         }
 
-        const friendUpdateResult = await userCollection.updateOne(
+        const friendUpdateResult = await collections.users!.updateOne(
           {
             _id: targetFriend._id,
           },
@@ -824,7 +786,7 @@ router.delete(
         };
       }
 
-      const currentUserUpdateResult = await userCollection.updateOne(
+      const currentUserUpdateResult = await collections.users!.updateOne(
         {
           _id: currentUser._id,
         },
@@ -853,8 +815,6 @@ router.delete(
       return res.status(httpConstants.HTTP_STATUS_INTERNAL_SERVER_ERROR).json({
         message: 'Something went wrong',
       });
-    } finally {
-      await mongoClient.close();
     }
 
     emitUpdateFriendshipStatus(currentUser._id, currentUserFriendResponse!);

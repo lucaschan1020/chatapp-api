@@ -1,7 +1,7 @@
 import express from 'express';
 import { constants as httpConstants } from 'http2';
 import { ObjectId, WithId } from 'mongodb';
-import mongoClient from '../database';
+import { collections } from '../database';
 import { FriendshipEnum, PrivateChannel, User } from '../database/schema';
 import Authorize, {
   AuthorizedResponse,
@@ -56,32 +56,24 @@ router.get(
     let groupFriendResult: WithId<User>[];
 
     try {
-      await mongoClient.connect();
-      const userCollection = await mongoClient
-        .db(process.env.MONGODBNAME)
-        .collection<User>('users');
-      const privateChannelCollection = await mongoClient
-        .db(process.env.MONGODBNAME)
-        .collection<PrivateChannel>('privateChannels');
-
-      privateChannelResult = await privateChannelCollection
-        .find({
+      privateChannelResult = await collections
+        .privateChannels!.find({
           _id: {
             $in: [...activePrivateChannelIds, ...joinedGroupPrivateChannels],
           },
         })
         .toArray();
 
-      friendResult = await userCollection
-        .find({
+      friendResult = await collections
+        .users!.find({
           _id: {
             $in: activeFriendIds,
           },
         })
         .toArray();
 
-      groupFriendResult = await userCollection
-        .find({
+      groupFriendResult = await collections
+        .users!.find({
           joinedGroupPrivateChannels: {
             $in: joinedGroupPrivateChannels,
           },
@@ -95,8 +87,6 @@ router.get(
       return res.status(httpConstants.HTTP_STATUS_INTERNAL_SERVER_ERROR).json({
         message: 'Something went wrong',
       });
-    } finally {
-      await mongoClient.close();
     }
 
     let privateChannelResponse = {} as Record<
@@ -232,21 +222,13 @@ router.post(
     }
 
     try {
-      await mongoClient.connect();
-      const userCollection = await mongoClient
-        .db(process.env.MONGODBNAME)
-        .collection<User>('users');
-      const privateChannelCollection = await mongoClient
-        .db(process.env.MONGODBNAME)
-        .collection<PrivateChannel>('privateChannels');
-
-      const newPrivateChannel = await privateChannelCollection.insertOne({
+      const newPrivateChannel = await collections.privateChannels!.insertOne({
         privateChannelName: isGroup ? privateChannelName.trim() : '',
         dateCreated: new Date(),
         isGroup: isGroup,
       });
 
-      const participantCount = await userCollection.countDocuments({
+      const participantCount = await collections.users!.countDocuments({
         _id: {
           $in: participants.map((participant) => new ObjectId(participant)),
         },
@@ -261,29 +243,32 @@ router.post(
       if (!isGroup) {
         const friendId = participants[0];
 
-        await userCollection.findOneAndUpdate({ _id: new ObjectId(friendId) }, [
-          {
-            $set: {
-              [`friends.${currentUser._id.toString()}.privateChannelId`]:
-                newPrivateChannel.insertedId,
-              [`friends.${currentUser._id.toString()}.friendId`]:
-                currentUser._id,
-              [`friends.${currentUser._id.toString()}.friendshipStatus`]: {
-                $cond: [
-                  {
-                    $not: [
-                      `$friends.${currentUser._id.toString()}.friendshipStatus`,
-                    ],
-                  },
-                  null,
-                  `$friends.${currentUser._id.toString()}.friendshipStatus`,
-                ],
+        await collections.users!.findOneAndUpdate(
+          { _id: new ObjectId(friendId) },
+          [
+            {
+              $set: {
+                [`friends.${currentUser._id.toString()}.privateChannelId`]:
+                  newPrivateChannel.insertedId,
+                [`friends.${currentUser._id.toString()}.friendId`]:
+                  currentUser._id,
+                [`friends.${currentUser._id.toString()}.friendshipStatus`]: {
+                  $cond: [
+                    {
+                      $not: [
+                        `$friends.${currentUser._id.toString()}.friendshipStatus`,
+                      ],
+                    },
+                    null,
+                    `$friends.${currentUser._id.toString()}.friendshipStatus`,
+                  ],
+                },
               },
             },
-          },
-        ]);
+          ]
+        );
 
-        await userCollection.findOneAndUpdate({ _id: currentUser._id }, [
+        await collections.users!.findOneAndUpdate({ _id: currentUser._id }, [
           {
             $set: {
               [`friends.${friendId}.privateChannelId`]:
@@ -303,7 +288,7 @@ router.post(
           },
         ]);
       } else {
-        await userCollection.updateMany(
+        await collections.users!.updateMany(
           {
             _id: {
               $in: [
@@ -320,8 +305,8 @@ router.post(
         );
       }
 
-      participantsResult = await userCollection
-        .find({
+      participantsResult = await collections
+        .users!.find({
           _id: {
             $in: [
               ...participants.map((participant) => new ObjectId(participant)),
@@ -331,7 +316,7 @@ router.post(
         })
         .toArray();
 
-      privateChannelResult = await privateChannelCollection.findOne({
+      privateChannelResult = await collections.privateChannels!.findOne({
         _id: newPrivateChannel.insertedId,
       });
 
@@ -347,9 +332,8 @@ router.post(
       return res.status(httpConstants.HTTP_STATUS_INTERNAL_SERVER_ERROR).json({
         message: 'Something went wrong',
       });
-    } finally {
-      await mongoClient.close();
     }
+
     const privateChannelResponse: WithId<PrivateChannelResponse> = {
       _id: privateChannelResult._id,
       participants: participantsResult.map((participant) => ({

@@ -4,7 +4,7 @@ import { TokenPayload } from 'google-auth-library';
 import { constants as httpConstants } from 'http2';
 import { InsertOneResult, WithId } from 'mongodb';
 import gapiVerifyToken from '../auth';
-import mongoClient from '../database';
+import { collections } from '../database';
 import { User } from '../database/schema';
 import Authorize, {
   AuthorizedResponse,
@@ -33,12 +33,7 @@ router.post('/login', async (req: LoginRequest, res: express.Response) => {
   }
   let result: WithId<User> | InsertOneResult<User> | null = null;
   try {
-    await mongoClient.connect();
-    const userCollection = await mongoClient
-      .db(process.env.MONGODBNAME)
-      .collection<User>('users');
-
-    result = await userCollection.findOne(
+    result = await collections.users!.findOne(
       { sub: decodedToken.sub },
       { projection: { _id: 0 } }
     );
@@ -50,7 +45,7 @@ router.post('/login', async (req: LoginRequest, res: express.Response) => {
     let toBeDiscriminator: number = 0;
     for (let index = 0; index < 10; index++) {
       toBeDiscriminator = Math.floor(Math.random() * 9999) + 1;
-      const found = await userCollection.countDocuments(
+      const found = await collections.users!.countDocuments(
         {
           username: decodedToken.name,
           discriminator: toBeDiscriminator,
@@ -69,7 +64,7 @@ router.post('/login', async (req: LoginRequest, res: express.Response) => {
         .json({ message: 'Failed to generate discriminator' });
     }
 
-    result = await userCollection.insertOne({
+    result = await collections.users!.insertOne({
       sub: decodedToken.sub,
       email: decodedToken.email!,
       emailVerified: decodedToken.email_verified!,
@@ -85,7 +80,7 @@ router.post('/login', async (req: LoginRequest, res: express.Response) => {
       joinedGroupPrivateChannels: [],
     });
 
-    result = await userCollection.findOne(
+    result = await collections.users!.findOne(
       { _id: result.insertedId },
       { projection: { registerTime: 0 } }
     );
@@ -94,8 +89,6 @@ router.post('/login', async (req: LoginRequest, res: express.Response) => {
     return res.status(httpConstants.HTTP_STATUS_INTERNAL_SERVER_ERROR).json({
       message: 'Something went wrong',
     });
-  } finally {
-    await mongoClient.close();
   }
   return res.status(httpConstants.HTTP_STATUS_CREATED).json(result);
 });

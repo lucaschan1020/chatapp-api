@@ -1,8 +1,8 @@
 import express from 'express';
 import { constants as httpConstants } from 'http2';
-import { ObjectId, WithId } from 'mongodb';
-import mongoClient from '../database';
-import { ChatBucket, ChatMessage, PrivateChannel } from '../database/schema';
+import { ObjectId } from 'mongodb';
+import { collections } from '../database';
+import { ChatMessage } from '../database/schema';
 import Authorize, {
   AuthorizedResponse,
 } from '../middleware/authorization-middleware';
@@ -70,16 +70,7 @@ router.get(
     }
 
     try {
-      await mongoClient.connect();
-      const privateChannelCollection = await mongoClient
-        .db(process.env.MONGODBNAME)
-        .collection<PrivateChannel>('privateChannels');
-
-      const chatBucketCollection = await mongoClient
-        .db(process.env.MONGODBNAME)
-        .collection<ChatBucket>('chatBuckets');
-
-      const privateChannel = await privateChannelCollection.findOne({
+      const privateChannel = await collections.privateChannels!.findOne({
         _id: new ObjectId(privateChannelId),
       });
 
@@ -103,7 +94,7 @@ router.get(
         });
       }
 
-      const chatBucketResult = await chatBucketCollection.findOne({
+      const chatBucketResult = await collections.chatBuckets!.findOne({
         channelId: new ObjectId(privateChannelId),
         bucketId: parseInt(bucketId),
       });
@@ -128,8 +119,6 @@ router.get(
       return res.status(httpConstants.HTTP_STATUS_INTERNAL_SERVER_ERROR).json({
         message: 'Something went wrong',
       });
-    } finally {
-      await mongoClient.close();
     }
 
     return res
@@ -153,16 +142,7 @@ router.get(
     }
 
     try {
-      await mongoClient.connect();
-      const privateChannelCollection = await mongoClient
-        .db(process.env.MONGODBNAME)
-        .collection<PrivateChannel>('privateChannels');
-
-      const chatBucketCollection = await mongoClient
-        .db(process.env.MONGODBNAME)
-        .collection<ChatBucket>('chatBuckets');
-
-      const privateChannel = await privateChannelCollection.findOne({
+      const privateChannel = await collections.privateChannels!.findOne({
         _id: new ObjectId(privateChannelId),
       });
 
@@ -186,8 +166,8 @@ router.get(
         });
       }
 
-      const chatBucketResult = await chatBucketCollection
-        .find({
+      const chatBucketResult = await collections
+        .chatBuckets!.find({
           channelId: new ObjectId(privateChannelId),
         })
         .sort({ bucketId: -1 })
@@ -196,7 +176,7 @@ router.get(
 
       if (chatBucketResult.length === 0) {
         const now = new Date();
-        const newChatBucket = await chatBucketCollection.insertOne({
+        const newChatBucket = await collections.chatBuckets!.insertOne({
           bucketId: 0,
           channelId: new ObjectId(privateChannelId),
           chatMessages: [],
@@ -225,8 +205,6 @@ router.get(
       return res.status(httpConstants.HTTP_STATUS_INTERNAL_SERVER_ERROR).json({
         message: 'Something went wrong',
       });
-    } finally {
-      await mongoClient.close();
     }
 
     return res
@@ -252,16 +230,7 @@ router.post(
     };
 
     try {
-      await mongoClient.connect();
-      const privateChannelCollection = await mongoClient
-        .db(process.env.MONGODBNAME)
-        .collection<PrivateChannel>('privateChannels');
-
-      const chatBucketCollection = await mongoClient
-        .db(process.env.MONGODBNAME)
-        .collection<ChatBucket>('chatBuckets');
-
-      const privateChannel = await privateChannelCollection.findOne({
+      const privateChannel = await collections.privateChannels!.findOne({
         _id: new ObjectId(privateChannelId),
       });
 
@@ -285,8 +254,8 @@ router.post(
         });
       }
 
-      const chatBucketResult = await chatBucketCollection
-        .find({
+      const chatBucketResult = await collections
+        .chatBuckets!.find({
           channelId: new ObjectId(privateChannelId),
         })
         .sort({ bucketId: -1 })
@@ -294,7 +263,7 @@ router.post(
         .toArray();
       let bucketId = 0;
       if (chatBucketResult.length === 0) {
-        await chatBucketCollection.insertOne({
+        await collections.chatBuckets!.insertOne({
           bucketId,
           channelId: new ObjectId(privateChannelId),
           chatMessages: [newChatMessage],
@@ -303,7 +272,7 @@ router.post(
         });
       } else if (chatBucketResult[0].chatMessages.length > 50) {
         bucketId = chatBucketResult[0].bucketId + 1;
-        await chatBucketCollection.insertOne({
+        await collections.chatBuckets!.insertOne({
           bucketId,
           channelId: new ObjectId(privateChannelId),
           chatMessages: [newChatMessage],
@@ -312,7 +281,7 @@ router.post(
         });
       } else {
         bucketId = chatBucketResult[0].bucketId;
-        const insertNewChatMessage = await chatBucketCollection.updateOne(
+        const insertNewChatMessage = await collections.chatBuckets!.updateOne(
           {
             _id: chatBucketResult[0]._id,
           },
@@ -345,8 +314,6 @@ router.post(
       return res.status(httpConstants.HTTP_STATUS_INTERNAL_SERVER_ERROR).json({
         message: 'Something went wrong',
       });
-    } finally {
-      await mongoClient.close();
     }
 
     emitSendPrivateChannelChat(

@@ -1,4 +1,4 @@
-import mongoClient from '../database';
+import { collections, connectToDatabase } from '../database';
 import { User } from '../database/schema';
 
 const LUCAS = {
@@ -13,12 +13,7 @@ const BEN = {
 
 const deleteFriend = async () => {
   try {
-    await mongoClient.connect();
-    const userCollection = await mongoClient
-      .db(process.env.MONGODBNAME)
-      .collection<User>('users');
-
-    const lucasModified = await userCollection.updateOne(
+    const lucasModified = await collections.users!.updateOne(
       {
         email: LUCAS.EMAIL,
       },
@@ -27,7 +22,7 @@ const deleteFriend = async () => {
       }
     );
 
-    const benModified = await userCollection.updateOne(
+    const benModified = await collections.users!.updateOne(
       {
         email: BEN.EMAIL,
       },
@@ -40,19 +35,12 @@ const deleteFriend = async () => {
   } catch (e) {
     console.log('error!');
     console.log(e);
-  } finally {
-    await mongoClient.close();
   }
 };
 
 const setNullFriend = async () => {
   try {
-    await mongoClient.connect();
-    const userCollection = await mongoClient
-      .db(process.env.MONGODBNAME)
-      .collection<User>('users');
-
-    const lucasModified = await userCollection.updateOne(
+    const lucasModified = await collections.users!.updateOne(
       {
         email: LUCAS.EMAIL,
       },
@@ -61,7 +49,7 @@ const setNullFriend = async () => {
       }
     );
 
-    const benModified = await userCollection.updateOne(
+    const benModified = await collections.users!.updateOne(
       {
         email: BEN.EMAIL,
       },
@@ -74,9 +62,9 @@ const setNullFriend = async () => {
   } catch (e) {
     console.log('error!');
     console.log(e);
-  } finally {
-    await mongoClient.close();
   }
 };
 
-deleteFriend();
+connectToDatabase().then(() => {
+  setNullFriend();
+});

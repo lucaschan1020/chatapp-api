@@ -3,7 +3,7 @@ import { TokenPayload } from 'google-auth-library';
 import { constants as httpConstants } from 'http2';
 import { WithId } from 'mongodb';
 import gapiVerifyToken from '../auth';
-import mongoClient from '../database';
+import { collections } from '../database';
 import { User } from '../database/schema';
 
 interface AuthorizedResponse extends express.Response {
@@ -50,20 +50,13 @@ const Authorize = async (
   }
   let currentUser: WithId<User> | null = null;
   try {
-    await mongoClient.connect();
-    const userCollection = await mongoClient
-      .db(process.env.MONGODBNAME)
-      .collection<User>('users');
-
-    currentUser = await userCollection.findOne({ sub: decodedToken.sub });
+    currentUser = await collections.users!.findOne({ sub: decodedToken.sub });
   } catch (e) {
     console.log(e);
 
     return res.status(httpConstants.HTTP_STATUS_INTERNAL_SERVER_ERROR).json({
       message: 'Something went wrong',
     });
-  } finally {
-    await mongoClient.close();
   }
 
   if (!currentUser) {

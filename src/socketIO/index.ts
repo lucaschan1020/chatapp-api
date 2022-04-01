@@ -3,7 +3,7 @@ import http from 'http';
 import { ObjectId, WithId } from 'mongodb';
 import { Server } from 'socket.io';
 import gapiVerifyToken from '../auth';
-import mongoClient from '../database';
+import { collections } from '../database';
 import { User } from '../database/schema';
 import { PrivateChannelChatResponse } from '../routes/chat';
 import { FriendResponse } from '../routes/friend';
@@ -48,17 +48,10 @@ const initializeSocketIO = (server: http.Server) => {
     }
     let currentUser: WithId<User> | null = null;
     try {
-      await mongoClient.connect();
-      const userCollection = await mongoClient
-        .db(process.env.MONGODBNAME)
-        .collection<User>('users');
-
-      currentUser = await userCollection.findOne({ sub: decodedToken.sub });
+      currentUser = await collections.users!.findOne({ sub: decodedToken.sub });
     } catch (e) {
       console.log(e);
       return next(new Error('Something went wrong'));
-    } finally {
-      await mongoClient.close();
     }
 
     if (!currentUser) {
