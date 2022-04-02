@@ -6,7 +6,8 @@ import { FriendshipEnum, PrivateChannel, User } from '../database/schema';
 import Authorize, {
   AuthorizedResponse,
 } from '../middleware/authorization-middleware';
-import { emitUpdateFriendshipStatus } from '../socketIO';
+import { emitNewPrivateChannel, emitUpdateFriendshipStatus } from '../socketIO';
+import { PrivateChannelResponse } from './privateChannel';
 const router = express.Router();
 
 interface GetFriendRequest extends express.Request {
@@ -112,12 +113,7 @@ router.get(
   Authorize,
   async (req: express.Request, res: AuthorizedResponse) => {
     const friends = res.locals.currentUser.friends;
-    const friendIds = Object.values(friends)
-      .filter((friend) => {
-        if (friend.friendshipStatus === null) return false;
-        return true;
-      })
-      .map((friend) => friend.friendId);
+    const friendIds = Object.values(friends).map((friend) => friend.friendId);
     let friendResult: WithId<User>[] | null = null;
     try {
       friendResult = await collections
@@ -137,7 +133,6 @@ router.get(
 
     let friendResponse = {} as Record<string, Partial<WithId<FriendResponse>>>;
     Object.values(friends).forEach((friend) => {
-      if (friend.friendshipStatus == null) return;
       friendResponse[friend.friendId.toString()] = {
         friendshipStatus: friend.friendshipStatus,
       };
@@ -165,6 +160,11 @@ router.post(
     const currentUser = res.locals.currentUser;
     let currentUserFriendResponse: WithId<FriendResponse>;
     let targetFriendResponse: WithId<FriendResponse>;
+    let currentUserNewPrivateChannelResponse: WithId<PrivateChannelResponse> | null =
+      null;
+    let targetFriendNewPrivateChannelResponse: WithId<PrivateChannelResponse> | null =
+      null;
+    let friendId: ObjectId | null = null;
     if (!username || !discriminator) {
       return res.status(httpConstants.HTTP_STATUS_BAD_REQUEST).json({
         message: 'Missing username or discriminator',
@@ -246,6 +246,35 @@ router.post(
             dateCreated: createdDate,
             isGroup: false,
           });
+
+          currentUserNewPrivateChannelResponse = {
+            _id: newPrivateChannel.insertedId,
+            participants: [
+              {
+                avatar: targetFriend.avatar,
+                username: targetFriend.username,
+                discriminator: targetFriend.discriminator,
+              },
+            ],
+            privateChannelName: '',
+            dateCreated: createdDate,
+            isGroup: false,
+          };
+
+          targetFriendNewPrivateChannelResponse = {
+            _id: newPrivateChannel.insertedId,
+            participants: [
+              {
+                avatar: currentUser.avatar,
+                username: currentUser.username,
+                discriminator: currentUser.discriminator,
+              },
+            ],
+            privateChannelName: '',
+            dateCreated: createdDate,
+            isGroup: false,
+          };
+          friendId = targetFriend._id;
         }
 
         const updatedCurrentUser = await collections.users!.findOneAndUpdate(
@@ -387,6 +416,17 @@ router.post(
       targetFriendResponse
     );
 
+    if (
+      currentUserNewPrivateChannelResponse !== null &&
+      targetFriendNewPrivateChannelResponse != null
+    ) {
+      emitNewPrivateChannel(
+        [currentUser._id],
+        currentUserNewPrivateChannelResponse
+      );
+      emitNewPrivateChannel([friendId!], targetFriendNewPrivateChannelResponse);
+    }
+
     return res
       .status(httpConstants.HTTP_STATUS_CREATED)
       .json(currentUserFriendResponse);
@@ -402,6 +442,11 @@ router.put(
     const { friendshipStatus } = req.body;
     let currentUserFriendResponse: WithId<FriendResponse> | null = null;
     let targetFriendResponse: WithId<FriendResponse> | null = null;
+    let currentUserNewPrivateChannelResponse: WithId<PrivateChannelResponse> | null =
+      null;
+    let targetFriendNewPrivateChannelResponse: WithId<PrivateChannelResponse> | null =
+      null;
+    let friendId: ObjectId | null = null;
 
     if (!username || !discriminator) {
       return res.status(httpConstants.HTTP_STATUS_BAD_REQUEST).json({
@@ -488,6 +533,35 @@ router.put(
             dateCreated: createdDate,
             isGroup: false,
           });
+
+          currentUserNewPrivateChannelResponse = {
+            _id: newPrivateChannel.insertedId,
+            participants: [
+              {
+                avatar: targetFriend.avatar,
+                username: targetFriend.username,
+                discriminator: targetFriend.discriminator,
+              },
+            ],
+            privateChannelName: '',
+            dateCreated: createdDate,
+            isGroup: false,
+          };
+
+          targetFriendNewPrivateChannelResponse = {
+            _id: newPrivateChannel.insertedId,
+            participants: [
+              {
+                avatar: currentUser.avatar,
+                username: currentUser.username,
+                discriminator: currentUser.discriminator,
+              },
+            ],
+            privateChannelName: '',
+            dateCreated: createdDate,
+            isGroup: false,
+          };
+          friendId = targetFriend._id;
         }
 
         const updatedCurrentUser = await collections.users!.findOneAndUpdate(
@@ -640,6 +714,17 @@ router.put(
         currentUserFriendResponse!._id,
         targetFriendResponse
       );
+    }
+
+    if (
+      currentUserNewPrivateChannelResponse !== null &&
+      targetFriendNewPrivateChannelResponse != null
+    ) {
+      emitNewPrivateChannel(
+        [currentUser._id],
+        currentUserNewPrivateChannelResponse
+      );
+      emitNewPrivateChannel([friendId!], targetFriendNewPrivateChannelResponse);
     }
 
     return res

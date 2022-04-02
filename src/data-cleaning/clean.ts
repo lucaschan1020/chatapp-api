@@ -1,5 +1,4 @@
 import { collections, connectToDatabase } from '../database';
-import { User } from '../database/schema';
 
 const LUCAS = {
   EMAIL: 'lucaschan102098@gmail.com',
@@ -65,6 +64,7 @@ const setNullFriend = async () => {
   }
 };
 
-connectToDatabase().then(() => {
-  setNullFriend();
+connectToDatabase().then(async () => {
+  await deleteFriend();
+  process.exit();
 });

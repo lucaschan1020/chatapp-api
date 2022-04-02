@@ -130,7 +130,7 @@ const emitNewPrivateChannel = (
     participantIds.map((participantId) => `user:${participantId.toString()}`)
   ).emit('newPrivateChannelChat', payload);
   participantIds.forEach((participantId) => {
-    const socketSession = socketSessions.get(participantId.id.toString());
+    const socketSession = socketSessions.get(participantId.toString());
     if (!socketSession) return;
     socketSession.forEach((socketId) => {
       const socket = io.sockets.sockets.get(socketId);
