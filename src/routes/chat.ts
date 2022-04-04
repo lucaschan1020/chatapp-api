@@ -1,6 +1,6 @@
 import express from 'express';
 import { constants as httpConstants } from 'http2';
-import { ObjectId } from 'mongodb';
+import { ObjectId, WithId } from 'mongodb';
 import { collections } from '../database';
 import { ChatMessage } from '../database/schema';
 import Authorize, {
@@ -35,6 +35,7 @@ export interface PrivateChannelChatResponse {
   channelId: string;
   bucketId: number;
   chatMessages: {
+    _id: string;
     timestamp: Date;
     senderId: string;
     content: string | null;
@@ -109,6 +110,7 @@ router.get(
         channelId: privateChannelId,
         bucketId: parseInt(bucketId),
         chatMessages: chatBucketResult.chatMessages.map((chatMessage) => ({
+          _id: chatMessage._id.toString(),
           timestamp: chatMessage.timestamp,
           senderId: chatMessage.senderId.toString(),
           content: chatMessage.content,
@@ -194,6 +196,7 @@ router.get(
           channelId: privateChannelId,
           bucketId: chatBucketResult[0].bucketId,
           chatMessages: chatBucketResult[0].chatMessages.map((chatMessage) => ({
+            _id: chatMessage._id.toString(),
             timestamp: chatMessage.timestamp,
             senderId: chatMessage.senderId.toString(),
             content: chatMessage.content,
@@ -222,7 +225,8 @@ router.post(
     const content = req.body.content.trim();
     const now = new Date();
     let privateChannelChatResponse: PrivateChannelChatResponse;
-    const newChatMessage: ChatMessage = {
+    const newChatMessage: WithId<ChatMessage> = {
+      _id: new ObjectId(),
       timestamp: now,
       senderId: currentUser._id,
       content: content,
@@ -303,6 +307,7 @@ router.post(
         bucketId,
         chatMessages: [
           {
+            _id: newChatMessage._id.toString(),
             timestamp: newChatMessage.timestamp,
             senderId: newChatMessage.senderId.toString(),
             content: newChatMessage.content,

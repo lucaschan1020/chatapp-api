@@ -1,4 +1,4 @@
-import { ObjectId } from 'mongodb';
+import { ObjectId, WithId } from 'mongodb';
 
 interface User {
   sub: string;
@@ -41,7 +41,7 @@ interface ChatBucket {
   channelId: ObjectId;
   startDateTime: Date;
   endDateTime: Date;
-  chatMessages: ChatMessage[];
+  chatMessages: WithId<ChatMessage>[];
   bucketId: number;
 }
 
