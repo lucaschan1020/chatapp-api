@@ -42,7 +42,8 @@ interface DeleteFriendRequest extends express.Request {
 }
 
 export interface FriendResponse {
-  friendshipStatus?: FriendshipEnum | null;
+  friendshipStatus: FriendshipEnum | null;
+  privateChannelId?: string;
   avatar: string;
   username: string;
   discriminator: number;
@@ -92,7 +93,8 @@ router.get(
 
       friendResponse = {
         _id: targetFriend._id,
-        friendshipStatus: userFriendship.friendshipStatus || null,
+        friendshipStatus: userFriendship.friendshipStatus ?? null,
+        privateChannelId: userFriendship.privateChannelId?.toString(),
         avatar: targetFriend.avatar,
         username: targetFriend.username,
         discriminator: targetFriend.discriminator,
@@ -135,6 +137,7 @@ router.get(
     Object.values(friends).forEach((friend) => {
       friendResponse[friend.friendId.toString()] = {
         friendshipStatus: friend.friendshipStatus,
+        privateChannelId: friend.privateChannelId?.toString(),
       };
     });
 
@@ -251,6 +254,7 @@ router.post(
             _id: newPrivateChannel.insertedId,
             participants: [
               {
+                _id: targetFriend._id.toString(),
                 avatar: targetFriend.avatar,
                 username: targetFriend.username,
                 discriminator: targetFriend.discriminator,
@@ -265,6 +269,7 @@ router.post(
             _id: newPrivateChannel.insertedId,
             participants: [
               {
+                _id: currentUser._id.toString(),
                 avatar: currentUser.avatar,
                 username: currentUser.username,
                 discriminator: currentUser.discriminator,
@@ -334,6 +339,10 @@ router.post(
         currentUserFriendResponse = {
           _id: targetFriend._id,
           friendshipStatus: FriendshipEnum.Friend,
+          privateChannelId:
+            updatedCurrentUser.value!.friends[
+              targetFriend._id.toString()
+            ].privateChannelId?.toString(),
           avatar: targetFriend.avatar,
           username: targetFriend.username,
           discriminator: targetFriend.discriminator,
@@ -342,6 +351,10 @@ router.post(
         targetFriendResponse = {
           _id: currentUser._id,
           friendshipStatus: FriendshipEnum.Friend,
+          privateChannelId:
+            updatedTargetFriend.value!.friends[
+              currentUser._id.toString()
+            ].privateChannelId?.toString(),
           avatar: currentUser.avatar,
           username: currentUser.username,
           discriminator: currentUser.discriminator,
@@ -390,6 +403,7 @@ router.post(
         currentUserFriendResponse = {
           _id: targetFriend._id,
           friendshipStatus: FriendshipEnum.Pending,
+          privateChannelId: userFriendship.privateChannelId?.toString(),
           avatar: targetFriend.avatar,
           username: targetFriend.username,
           discriminator: targetFriend.discriminator,
@@ -398,6 +412,7 @@ router.post(
         targetFriendResponse = {
           _id: currentUser._id,
           friendshipStatus: FriendshipEnum.Requested,
+          privateChannelId: targetFriendship.privateChannelId?.toString(),
           avatar: currentUser.avatar,
           username: currentUser.username,
           discriminator: currentUser.discriminator,
@@ -538,6 +553,7 @@ router.put(
             _id: newPrivateChannel.insertedId,
             participants: [
               {
+                _id: targetFriend._id.toString(),
                 avatar: targetFriend.avatar,
                 username: targetFriend.username,
                 discriminator: targetFriend.discriminator,
@@ -552,6 +568,7 @@ router.put(
             _id: newPrivateChannel.insertedId,
             participants: [
               {
+                _id: currentUser._id.toString(),
                 avatar: currentUser.avatar,
                 username: currentUser.username,
                 discriminator: currentUser.discriminator,
@@ -621,6 +638,10 @@ router.put(
         currentUserFriendResponse = {
           _id: targetFriend._id,
           friendshipStatus: FriendshipEnum.Friend,
+          privateChannelId:
+            updatedCurrentUser.value!.friends[
+              targetFriend._id.toString()
+            ].privateChannelId?.toString(),
           avatar: targetFriend.avatar,
           username: targetFriend.username,
           discriminator: targetFriend.discriminator,
@@ -629,6 +650,10 @@ router.put(
         targetFriendResponse = {
           _id: currentUser._id,
           friendshipStatus: FriendshipEnum.Friend,
+          privateChannelId:
+            updatedTargetFriend.value!.friends[
+              currentUser._id.toString()
+            ].privateChannelId?.toString(),
           avatar: currentUser.avatar,
           username: currentUser.username,
           discriminator: currentUser.discriminator,
@@ -687,6 +712,7 @@ router.put(
           targetFriendResponse = {
             _id: currentUser._id,
             friendshipStatus: null,
+            privateChannelId: targetFriendship.privateChannelId?.toString(),
             avatar: currentUser.avatar,
             username: currentUser.username,
             discriminator: currentUser.discriminator,
@@ -696,6 +722,7 @@ router.put(
         currentUserFriendResponse = {
           _id: targetFriend._id,
           friendshipStatus: FriendshipEnum.Blocked,
+          privateChannelId: userFriendship.privateChannelId?.toString(),
           avatar: targetFriend.avatar,
           username: targetFriend.username,
           discriminator: targetFriend.discriminator,
@@ -806,6 +833,7 @@ router.delete(
         targetFriendResponse = {
           _id: currentUser._id,
           friendshipStatus: null,
+          privateChannelId: targetFriendship.privateChannelId?.toString(),
           avatar: currentUser.avatar,
           username: currentUser.username,
           discriminator: currentUser.discriminator,
@@ -865,6 +893,7 @@ router.delete(
         targetFriendResponse = {
           _id: currentUser._id,
           friendshipStatus: null,
+          privateChannelId: targetFriendship.privateChannelId?.toString(),
           avatar: currentUser.avatar,
           username: currentUser.username,
           discriminator: currentUser.discriminator,
@@ -891,6 +920,7 @@ router.delete(
       currentUserFriendResponse = {
         _id: targetFriend._id,
         friendshipStatus: null,
+        privateChannelId: userFriendship.privateChannelId?.toString(),
         avatar: targetFriend.avatar,
         username: targetFriend.username,
         discriminator: targetFriend.discriminator,

@@ -2,7 +2,7 @@ import express from 'express';
 import { constants as httpConstants } from 'http2';
 import { ObjectId, WithId } from 'mongodb';
 import { collections } from '../database';
-import { ChatMessage } from '../database/schema';
+import { ChatMessage, Friend, FriendshipEnum } from '../database/schema';
 import Authorize, {
   AuthorizedResponse,
 } from '../middleware/authorization-middleware';
@@ -243,18 +243,32 @@ router.post(
           message: 'Private channel not found',
         });
       }
-
-      const isJoined = privateChannel.isGroup
+      const { isGroup } = privateChannel;
+      let userFriendship: Friend | undefined;
+      if (!isGroup) {
+        userFriendship = Object.values(currentUser.friends).find((friend) =>
+          friend.privateChannelId?.equals(privateChannelId)
+        );
+      }
+      const isJoined = isGroup
         ? currentUser.joinedGroupPrivateChannels.some((groupPrivateChannel) =>
             groupPrivateChannel.equals(privateChannelId)
           )
-        : Object.values(currentUser.friends).some((friend) =>
-            friend.privateChannelId?.equals(privateChannelId)
-          );
+        : userFriendship !== undefined;
 
       if (!isJoined) {
         return res.status(httpConstants.HTTP_STATUS_UNAUTHORIZED).json({
           message: 'User is not participant of this private channel',
+        });
+      }
+
+      if (
+        !isGroup &&
+        (!userFriendship ||
+          userFriendship.friendshipStatus !== FriendshipEnum.Friend)
+      ) {
+        return res.status(httpConstants.HTTP_STATUS_CONFLICT).json({
+          message: 'Failed to insert new message into chat',
         });
       }
 
