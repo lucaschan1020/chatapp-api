@@ -205,8 +205,8 @@ router.post(
       const targetFriendship = targetFriend.friends[currentUser._id.toString()];
 
       if (
-        (userFriendship && userFriendship.friendshipStatus != null) ||
-        (targetFriendship && targetFriendship.friendshipStatus != null)
+        (userFriendship && userFriendship.friendshipStatus !== null) ||
+        (targetFriendship && targetFriendship.friendshipStatus !== null)
       ) {
         if (!userFriendship) {
           return res.status(httpConstants.HTTP_STATUS_CONFLICT).json({
@@ -226,13 +226,16 @@ router.post(
           });
         }
 
-        if (userFriendship.friendshipStatus !== FriendshipEnum.Requested) {
+        if (targetFriendship.friendshipStatus !== FriendshipEnum.Pending) {
           return res.status(httpConstants.HTTP_STATUS_CONFLICT).json({
             message: 'Failed to update friend friendship status',
           });
         }
 
-        if (targetFriendship.friendshipStatus !== FriendshipEnum.Pending) {
+        if (
+          userFriendship.friendshipStatus !== null &&
+          userFriendship.friendshipStatus !== FriendshipEnum.Requested
+        ) {
           return res.status(httpConstants.HTTP_STATUS_CONFLICT).json({
             message: 'Failed to update friend friendship status',
           });
@@ -433,7 +436,7 @@ router.post(
 
     if (
       currentUserNewPrivateChannelResponse !== null &&
-      targetFriendNewPrivateChannelResponse != null
+      targetFriendNewPrivateChannelResponse !== null
     ) {
       emitNewPrivateChannel(
         [currentUser._id],
@@ -745,7 +748,7 @@ router.put(
 
     if (
       currentUserNewPrivateChannelResponse !== null &&
-      targetFriendNewPrivateChannelResponse != null
+      targetFriendNewPrivateChannelResponse !== null
     ) {
       emitNewPrivateChannel(
         [currentUser._id],
