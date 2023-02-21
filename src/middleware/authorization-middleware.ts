@@ -4,13 +4,13 @@ import { constants as httpConstants } from 'http2';
 import { WithId } from 'mongodb';
 import gapiVerifyToken from '../auth';
 import { collections } from '../database';
-import { User } from '../database/schema';
+import { UserDTO, UserModel } from '../database/schema';
+import { arrayToObject } from '../utilities/objectArrayConverter';
 
-interface AuthorizedResponse extends express.Response {
-  locals: {
-    currentUser: WithId<User>;
-  };
-}
+type AuthorizedResponse = express.Response<
+  any,
+  { currentUser: WithId<UserDTO> }
+>;
 
 const Authorize = async (
   req: express.Request,
@@ -48,9 +48,11 @@ const Authorize = async (
       message: 'Invalid token',
     });
   }
-  let currentUser: WithId<User> | null = null;
+  let currentUser: WithId<UserModel> | null = null;
   try {
-    currentUser = await collections.users!.findOne({ sub: decodedToken.sub });
+    currentUser = await collections.users!.findOne({
+      sub: decodedToken.sub,
+    });
   } catch (e) {
     console.log(e);
 
@@ -65,7 +67,23 @@ const Authorize = async (
     });
   }
 
-  res.locals.currentUser = currentUser;
+  // TO DO REFACTOR
+  res.locals.currentUser = {
+    _id: currentUser._id,
+    sub: currentUser.sub,
+    email: currentUser.email,
+    emailVerified: currentUser.emailVerified,
+    name: currentUser.name,
+    avatar: currentUser.avatar,
+    givenName: currentUser.givenName,
+    familyName: currentUser.familyName,
+    locale: currentUser.locale,
+    username: currentUser.username,
+    discriminator: currentUser.discriminator,
+    registerTime: currentUser.registerTime,
+    joinedGroupPrivateChannels: currentUser.joinedGroupPrivateChannels,
+    friends: arrayToObject(currentUser.friends, 'friendId'),
+  };
   next();
 };
 
