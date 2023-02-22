@@ -318,12 +318,16 @@ router.post(
             $set: {
               'friends.$.friendId': targetFriendDTO._id,
               'friends.$.friendshipStatus': FriendshipEnum.Friend,
-              'friends.$.privateChannelId': newPrivateChannel?.insertedId,
+              'friends.$.privateChannelId':
+                newPrivateChannel !== null
+                  ? newPrivateChannel.insertedId
+                  : undefined,
               'friends.$.active': true,
             },
           },
           {
             returnDocument: 'after',
+            ignoreUndefined: true,
           }
         );
 
@@ -333,12 +337,16 @@ router.post(
             $set: {
               'friends.$.friendId': currentUser._id,
               'friends.$.friendshipStatus': FriendshipEnum.Friend,
-              'friends.$.privateChannelId': newPrivateChannel?.insertedId,
+              'friends.$.privateChannelId':
+                newPrivateChannel !== null
+                  ? newPrivateChannel.insertedId
+                  : undefined,
               'friends.$.active': true,
             },
           },
           {
             returnDocument: 'after',
+            ignoreUndefined: true,
           }
         );
 
@@ -685,12 +693,16 @@ router.put(
             $set: {
               'friends.$.friendId': targetFriendDTO._id,
               'friends.$.friendshipStatus': FriendshipEnum.Friend,
-              'friends.$.privateChannelId': newPrivateChannel?.insertedId,
+              'friends.$.privateChannelId':
+                newPrivateChannel !== null
+                  ? newPrivateChannel.insertedId
+                  : undefined,
               'friends.$.active': true,
             },
           },
           {
             returnDocument: 'after',
+            ignoreUndefined: true,
           }
         );
 
@@ -700,12 +712,16 @@ router.put(
             $set: {
               'friends.$.friendId': currentUser._id,
               'friends.$.friendshipStatus': FriendshipEnum.Friend,
-              'friends.$.privateChannelId': newPrivateChannel?.insertedId,
+              'friends.$.privateChannelId':
+                newPrivateChannel !== null
+                  ? newPrivateChannel.insertedId
+                  : undefined,
               'friends.$.active': true,
             },
           },
           {
             returnDocument: 'after',
+            ignoreUndefined: true,
           }
         );
 
