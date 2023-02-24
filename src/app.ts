@@ -1,4 +1,3 @@
-import cors from 'cors';
 import 'dotenv/config';
 import express from 'express';
 import http from 'http';
@@ -15,11 +14,6 @@ const server = new http.Server(app);
 const serverPort: number = 5000;
 connectToDatabase()
   .then(() => {
-    app.use(
-      cors({
-        origin: 'http://localhost:3000',
-      })
-    );
     app.use(express.json());
     initializeSocketIO(server);
 

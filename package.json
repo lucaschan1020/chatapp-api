@@ -4,15 +4,15 @@
   "description": "",
   "main": "app.ts",
   "scripts": {
-    "start": "nodemon ./src/app.ts",
-    "compile": "tsc",
-    "clean": "ts-node ./src/data-cleaning/clean.ts"
+    "dev": "nodemon ./src/app.ts",
+    "clean": "ts-node ./src/data-cleaning/clean.ts",
+    "build": "tsc",
+    "start": "node ./app.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "cors": "^2.8.5",
     "date-fns": "^2.29.3",
     "dotenv": "^16.0.3",
     "express": "^4.18.2",
