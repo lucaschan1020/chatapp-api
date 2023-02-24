@@ -4,7 +4,7 @@ import { ObjectId, WithId } from 'mongodb';
 import { Server } from 'socket.io';
 import gapiVerifyToken from '../auth';
 import { collections } from '../database';
-import { User } from '../database/schema';
+import { UserModel } from '../database/schema';
 import { PrivateChannelChatResponse } from '../routes/chat';
 import { FriendResponse } from '../routes/friend';
 import { PrivateChannelResponse } from '../routes/privateChannel';
@@ -46,7 +46,7 @@ const initializeSocketIO = (server: http.Server) => {
     if (!decodedToken) {
       return next(new Error('Invalid token'));
     }
-    let currentUser: WithId<User> | null = null;
+    let currentUser: WithId<UserModel> | null = null;
     try {
       currentUser = await collections.users!.findOne({ sub: decodedToken.sub });
     } catch (e) {

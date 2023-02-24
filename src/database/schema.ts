@@ -1,6 +1,22 @@
 import { ObjectId, WithId } from 'mongodb';
 
-interface User {
+interface UserModel {
+  sub: string;
+  email: string;
+  emailVerified: boolean;
+  name: string;
+  avatar: string;
+  givenName: string;
+  familyName: string;
+  locale: string;
+  username: string;
+  discriminator: number;
+  registerTime: Date;
+  friends: Friend[];
+  joinedGroupPrivateChannels: ObjectId[];
+}
+
+interface UserDTO {
   sub: string;
   email: string;
   emailVerified: boolean;
@@ -13,7 +29,6 @@ interface User {
   discriminator: number;
   registerTime: Date;
   friends: Record<string, Friend>;
-  // activePrivateChannels: ObjectId[];
   joinedGroupPrivateChannels: ObjectId[];
 }
 
@@ -59,7 +74,8 @@ interface ChatMessage {
 // }
 
 export {
-  User,
+  UserModel,
+  UserDTO,
   Friend,
   FriendshipEnum,
   PrivateChannel,

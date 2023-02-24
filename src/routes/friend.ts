@@ -2,11 +2,17 @@ import express from 'express';
 import { constants as httpConstants } from 'http2';
 import { InsertOneResult, ObjectId, WithId } from 'mongodb';
 import { collections } from '../database';
-import { FriendshipEnum, PrivateChannel, User } from '../database/schema';
+import {
+  FriendshipEnum,
+  PrivateChannel,
+  UserDTO,
+  UserModel,
+} from '../database/schema';
 import Authorize, {
   AuthorizedResponse,
 } from '../middleware/authorization-middleware';
 import { emitNewPrivateChannel, emitUpdateFriendshipStatus } from '../socketIO';
+import { arrayToObject } from '../utilities/objectArrayConverter';
 import { PrivateChannelResponse } from './privateChannel';
 const router = express.Router();
 
@@ -116,7 +122,7 @@ router.get(
   async (req: express.Request, res: AuthorizedResponse) => {
     const friends = res.locals.currentUser.friends;
     const friendIds = Object.values(friends).map((friend) => friend.friendId);
-    let friendResult: WithId<User>[] | null = null;
+    let friendResult: WithId<UserModel>[] | null = null;
     try {
       friendResult = await collections
         .users!.find(
@@ -190,19 +196,40 @@ router.post(
     }
 
     try {
-      const targetFriend = await collections.users!.findOne({
+      const targetFriendModel = await collections.users!.findOne({
         username: username,
         discriminator: parseInt(discriminator),
       });
 
-      if (!targetFriend) {
+      if (!targetFriendModel) {
         return res.status(httpConstants.HTTP_STATUS_NOT_FOUND).json({
           message: 'User not found',
         });
       }
 
-      const userFriendship = currentUser.friends[targetFriend._id.toString()];
-      const targetFriendship = targetFriend.friends[currentUser._id.toString()];
+      // TO DO REFACTOR
+      const targetFriendDTO: WithId<UserDTO> = {
+        _id: targetFriendModel._id,
+        sub: targetFriendModel.sub,
+        email: targetFriendModel.email,
+        emailVerified: targetFriendModel.emailVerified,
+        name: targetFriendModel.name,
+        avatar: targetFriendModel.avatar,
+        givenName: targetFriendModel.givenName,
+        familyName: targetFriendModel.familyName,
+        locale: targetFriendModel.locale,
+        username: targetFriendModel.username,
+        discriminator: targetFriendModel.discriminator,
+        registerTime: targetFriendModel.registerTime,
+        joinedGroupPrivateChannels:
+          targetFriendModel.joinedGroupPrivateChannels,
+        friends: arrayToObject(targetFriendModel.friends, 'friendId'),
+      };
+
+      const userFriendship =
+        currentUser.friends[targetFriendDTO._id.toString()];
+      const targetFriendship =
+        targetFriendDTO.friends[currentUser._id.toString()];
 
       if (
         (userFriendship && userFriendship.friendshipStatus !== null) ||
@@ -257,10 +284,10 @@ router.post(
             _id: newPrivateChannel.insertedId,
             participants: [
               {
-                _id: targetFriend._id.toString(),
-                avatar: targetFriend.avatar,
-                username: targetFriend.username,
-                discriminator: targetFriend.discriminator,
+                _id: targetFriendDTO._id.toString(),
+                avatar: targetFriendDTO.avatar,
+                username: targetFriendDTO.username,
+                discriminator: targetFriendDTO.discriminator,
               },
             ],
             privateChannelName: '',
@@ -282,80 +309,105 @@ router.post(
             dateCreated: createdDate,
             isGroup: false,
           };
-          friendId = targetFriend._id;
+          friendId = targetFriendDTO._id;
         }
 
         const updatedCurrentUser = await collections.users!.findOneAndUpdate(
-          { _id: currentUser._id },
-          [
-            {
-              $set: {
-                [`friends.${targetFriend._id.toString()}.friendshipStatus`]:
-                  FriendshipEnum.Friend,
-                [`friends.${targetFriend._id.toString()}.privateChannelId`]: {
-                  $cond: [
-                    {
-                      $not: [
-                        `$friends.${targetFriend._id.toString()}.privateChannelId`,
-                      ],
-                    },
-                    newPrivateChannel?.insertedId,
-                    `$friends.${targetFriend._id.toString()}.privateChannelId`,
-                  ],
-                },
-                [`friends.${targetFriend._id.toString()}.active`]: true,
-              },
+          { _id: currentUser._id, 'friends.friendId': targetFriendDTO._id },
+          {
+            $set: {
+              'friends.$.friendId': targetFriendDTO._id,
+              'friends.$.friendshipStatus': FriendshipEnum.Friend,
+              'friends.$.privateChannelId':
+                newPrivateChannel !== null
+                  ? newPrivateChannel.insertedId
+                  : undefined,
+              'friends.$.active': true,
             },
-          ],
+          },
           {
             returnDocument: 'after',
+            ignoreUndefined: true,
           }
         );
 
         const updatedTargetFriend = await collections.users!.findOneAndUpdate(
-          { _id: targetFriend._id },
-          [
-            {
-              $set: {
-                [`friends.${currentUser._id.toString()}.friendshipStatus`]:
-                  FriendshipEnum.Friend,
-                [`friends.${currentUser._id.toString()}.privateChannelId`]: {
-                  $cond: [
-                    {
-                      $not: [
-                        `$friends.${currentUser._id.toString()}.privateChannelId`,
-                      ],
-                    },
-                    newPrivateChannel?.insertedId,
-                    `$friends.${currentUser._id.toString()}.privateChannelId`,
-                  ],
-                },
-                [`friends.${currentUser._id.toString()}.active`]: true,
-              },
+          { _id: targetFriendDTO._id, 'friends.friendId': currentUser._id },
+          {
+            $set: {
+              'friends.$.friendId': currentUser._id,
+              'friends.$.friendshipStatus': FriendshipEnum.Friend,
+              'friends.$.privateChannelId':
+                newPrivateChannel !== null
+                  ? newPrivateChannel.insertedId
+                  : undefined,
+              'friends.$.active': true,
             },
-          ],
+          },
           {
             returnDocument: 'after',
+            ignoreUndefined: true,
           }
         );
 
+        // TO DO REFACTOR
+        const updatedCurrentUserDTO: WithId<UserDTO> = {
+          _id: updatedCurrentUser.value!._id,
+          sub: updatedCurrentUser.value!.sub,
+          email: updatedCurrentUser.value!.email,
+          emailVerified: updatedCurrentUser.value!.emailVerified,
+          name: updatedCurrentUser.value!.name,
+          avatar: updatedCurrentUser.value!.avatar,
+          givenName: updatedCurrentUser.value!.givenName,
+          familyName: updatedCurrentUser.value!.familyName,
+          locale: updatedCurrentUser.value!.locale,
+          username: updatedCurrentUser.value!.username,
+          discriminator: updatedCurrentUser.value!.discriminator,
+          registerTime: updatedCurrentUser.value!.registerTime,
+          joinedGroupPrivateChannels:
+            updatedCurrentUser.value!.joinedGroupPrivateChannels,
+          friends: arrayToObject(updatedCurrentUser.value!.friends, 'friendId'),
+        };
+
+        // TO DO REFACTOR
+        const updatedTargetFriendDTO: WithId<UserDTO> = {
+          _id: updatedTargetFriend.value!._id,
+          sub: updatedTargetFriend.value!.sub,
+          email: updatedTargetFriend.value!.email,
+          emailVerified: updatedTargetFriend.value!.emailVerified,
+          name: updatedTargetFriend.value!.name,
+          avatar: updatedTargetFriend.value!.avatar,
+          givenName: updatedTargetFriend.value!.givenName,
+          familyName: updatedTargetFriend.value!.familyName,
+          locale: updatedTargetFriend.value!.locale,
+          username: updatedTargetFriend.value!.username,
+          discriminator: updatedTargetFriend.value!.discriminator,
+          registerTime: updatedTargetFriend.value!.registerTime,
+          joinedGroupPrivateChannels:
+            updatedTargetFriend.value!.joinedGroupPrivateChannels,
+          friends: arrayToObject(
+            updatedTargetFriend.value!.friends,
+            'friendId'
+          ),
+        };
+
         currentUserFriendResponse = {
-          _id: targetFriend._id,
+          _id: targetFriendDTO._id,
           friendshipStatus: FriendshipEnum.Friend,
           privateChannelId:
-            updatedCurrentUser.value!.friends[
-              targetFriend._id.toString()
+            updatedCurrentUserDTO.friends[
+              targetFriendDTO._id.toString()
             ].privateChannelId?.toString(),
-          avatar: targetFriend.avatar,
-          username: targetFriend.username,
-          discriminator: targetFriend.discriminator,
+          avatar: targetFriendDTO.avatar,
+          username: targetFriendDTO.username,
+          discriminator: targetFriendDTO.discriminator,
         };
 
         targetFriendResponse = {
           _id: currentUser._id,
           friendshipStatus: FriendshipEnum.Friend,
           privateChannelId:
-            updatedTargetFriend.value!.friends[
+            updatedTargetFriendDTO.friends[
               currentUser._id.toString()
             ].privateChannelId?.toString(),
           avatar: currentUser.avatar,
@@ -365,51 +417,81 @@ router.post(
       } else {
         const friendUpdateResult = await collections.users!.updateOne(
           {
-            _id: targetFriend._id,
+            _id: targetFriendDTO._id,
+            'friends.friendId': currentUser._id,
           },
           {
             $set: {
-              [`friends.${currentUser._id.toString()}.friendId`]:
-                currentUser._id,
-              [`friends.${currentUser._id.toString()}.friendshipStatus`]:
-                FriendshipEnum.Requested,
+              'friends.$.friendId': currentUser._id,
+              'friends.$.friendshipStatus': FriendshipEnum.Requested,
             },
           }
         );
 
         if (friendUpdateResult.modifiedCount === 0) {
-          return res.status(httpConstants.HTTP_STATUS_CONFLICT).json({
-            message: 'Failed to update friend friendship status',
-          });
+          const createFriendResult = await collections.users!.updateOne(
+            {
+              _id: targetFriendDTO._id,
+            },
+            {
+              $addToSet: {
+                friends: {
+                  friendId: currentUser._id,
+                  friendshipStatus: FriendshipEnum.Requested,
+                },
+              },
+            }
+          );
+
+          if (createFriendResult.modifiedCount === 0) {
+            return res.status(httpConstants.HTTP_STATUS_CONFLICT).json({
+              message: 'Failed to update friend friendship status',
+            });
+          }
         }
 
         const currentUserUpdateResult = await collections.users!.updateOne(
           {
             _id: currentUser._id,
+            'friends.friendId': targetFriendDTO._id,
           },
           {
             $set: {
-              [`friends.${targetFriend._id.toString()}.friendId`]:
-                targetFriend._id,
-              [`friends.${targetFriend._id.toString()}.friendshipStatus`]:
-                FriendshipEnum.Pending,
+              'friends.$.friendId': targetFriendDTO._id,
+              'friends.$.friendshipStatus': FriendshipEnum.Pending,
             },
           }
         );
 
         if (currentUserUpdateResult.modifiedCount === 0) {
-          return res.status(httpConstants.HTTP_STATUS_CONFLICT).json({
-            message: 'Failed to update your friendship status',
-          });
+          const createFriendResult = await collections.users!.updateOne(
+            {
+              _id: currentUser._id,
+            },
+            {
+              $addToSet: {
+                friends: {
+                  friendId: targetFriendDTO._id,
+                  friendshipStatus: FriendshipEnum.Pending,
+                },
+              },
+            }
+          );
+
+          if (createFriendResult.modifiedCount === 0) {
+            return res.status(httpConstants.HTTP_STATUS_CONFLICT).json({
+              message: 'Failed to update your friendship status',
+            });
+          }
         }
 
         currentUserFriendResponse = {
-          _id: targetFriend._id,
+          _id: targetFriendDTO._id,
           friendshipStatus: FriendshipEnum.Pending,
           privateChannelId: userFriendship.privateChannelId?.toString(),
-          avatar: targetFriend.avatar,
-          username: targetFriend.username,
-          discriminator: targetFriend.discriminator,
+          avatar: targetFriendDTO.avatar,
+          username: targetFriendDTO.username,
+          discriminator: targetFriendDTO.discriminator,
         };
 
         targetFriendResponse = {
@@ -504,19 +586,40 @@ router.put(
     }
 
     try {
-      const targetFriend = await collections.users!.findOne({
+      const targetFriendModel = await collections.users!.findOne({
         username: username,
         discriminator: parseInt(discriminator),
       });
 
-      if (!targetFriend) {
+      if (!targetFriendModel) {
         return res.status(httpConstants.HTTP_STATUS_NOT_FOUND).json({
           message: 'User not found',
         });
       }
 
-      const userFriendship = currentUser.friends[targetFriend._id.toString()];
-      const targetFriendship = targetFriend.friends[currentUser._id.toString()];
+      // TO DO REFACTOR
+      const targetFriendDTO: WithId<UserDTO> = {
+        _id: targetFriendModel._id,
+        sub: targetFriendModel.sub,
+        email: targetFriendModel.email,
+        emailVerified: targetFriendModel.emailVerified,
+        name: targetFriendModel.name,
+        avatar: targetFriendModel.avatar,
+        givenName: targetFriendModel.givenName,
+        familyName: targetFriendModel.familyName,
+        locale: targetFriendModel.locale,
+        username: targetFriendModel.username,
+        discriminator: targetFriendModel.discriminator,
+        registerTime: targetFriendModel.registerTime,
+        joinedGroupPrivateChannels:
+          targetFriendModel.joinedGroupPrivateChannels,
+        friends: arrayToObject(targetFriendModel.friends, 'friendId'),
+      };
+
+      const userFriendship =
+        currentUser.friends[targetFriendDTO._id.toString()];
+      const targetFriendship =
+        targetFriendDTO.friends[currentUser._id.toString()];
 
       if (friendshipStatus === FriendshipEnum.Friend) {
         if (!userFriendship || userFriendship.friendshipStatus === null) {
@@ -556,10 +659,10 @@ router.put(
             _id: newPrivateChannel.insertedId,
             participants: [
               {
-                _id: targetFriend._id.toString(),
-                avatar: targetFriend.avatar,
-                username: targetFriend.username,
-                discriminator: targetFriend.discriminator,
+                _id: targetFriendDTO._id.toString(),
+                avatar: targetFriendDTO.avatar,
+                username: targetFriendDTO.username,
+                discriminator: targetFriendDTO.discriminator,
               },
             ],
             privateChannelName: '',
@@ -581,80 +684,105 @@ router.put(
             dateCreated: createdDate,
             isGroup: false,
           };
-          friendId = targetFriend._id;
+          friendId = targetFriendDTO._id;
         }
 
         const updatedCurrentUser = await collections.users!.findOneAndUpdate(
-          { _id: currentUser._id },
-          [
-            {
-              $set: {
-                [`friends.${targetFriend._id.toString()}.friendshipStatus`]:
-                  FriendshipEnum.Friend,
-                [`friends.${targetFriend._id.toString()}.privateChannelId`]: {
-                  $cond: [
-                    {
-                      $not: [
-                        `$friends.${targetFriend._id.toString()}.privateChannelId`,
-                      ],
-                    },
-                    newPrivateChannel?.insertedId,
-                    `$friends.${targetFriend._id.toString()}.privateChannelId`,
-                  ],
-                },
-                [`friends.${targetFriend._id.toString()}.active`]: true,
-              },
+          { _id: currentUser._id, 'friends.friendId': targetFriendDTO._id },
+          {
+            $set: {
+              'friends.$.friendId': targetFriendDTO._id,
+              'friends.$.friendshipStatus': FriendshipEnum.Friend,
+              'friends.$.privateChannelId':
+                newPrivateChannel !== null
+                  ? newPrivateChannel.insertedId
+                  : undefined,
+              'friends.$.active': true,
             },
-          ],
+          },
           {
             returnDocument: 'after',
+            ignoreUndefined: true,
           }
         );
 
         const updatedTargetFriend = await collections.users!.findOneAndUpdate(
-          { _id: targetFriend._id },
-          [
-            {
-              $set: {
-                [`friends.${currentUser._id.toString()}.friendshipStatus`]:
-                  FriendshipEnum.Friend,
-                [`friends.${currentUser._id.toString()}.privateChannelId`]: {
-                  $cond: [
-                    {
-                      $not: [
-                        `$friends.${currentUser._id.toString()}.privateChannelId`,
-                      ],
-                    },
-                    newPrivateChannel?.insertedId,
-                    `$friends.${currentUser._id.toString()}.privateChannelId`,
-                  ],
-                },
-                [`friends.${currentUser._id.toString()}.active`]: true,
-              },
+          { _id: targetFriendDTO._id, 'friends.friendId': currentUser._id },
+          {
+            $set: {
+              'friends.$.friendId': currentUser._id,
+              'friends.$.friendshipStatus': FriendshipEnum.Friend,
+              'friends.$.privateChannelId':
+                newPrivateChannel !== null
+                  ? newPrivateChannel.insertedId
+                  : undefined,
+              'friends.$.active': true,
             },
-          ],
+          },
           {
             returnDocument: 'after',
+            ignoreUndefined: true,
           }
         );
 
+        // TO DO REFACTOR
+        const updatedCurrentUserDTO: WithId<UserDTO> = {
+          _id: updatedCurrentUser.value!._id,
+          sub: updatedCurrentUser.value!.sub,
+          email: updatedCurrentUser.value!.email,
+          emailVerified: updatedCurrentUser.value!.emailVerified,
+          name: updatedCurrentUser.value!.name,
+          avatar: updatedCurrentUser.value!.avatar,
+          givenName: updatedCurrentUser.value!.givenName,
+          familyName: updatedCurrentUser.value!.familyName,
+          locale: updatedCurrentUser.value!.locale,
+          username: updatedCurrentUser.value!.username,
+          discriminator: updatedCurrentUser.value!.discriminator,
+          registerTime: updatedCurrentUser.value!.registerTime,
+          joinedGroupPrivateChannels:
+            updatedCurrentUser.value!.joinedGroupPrivateChannels,
+          friends: arrayToObject(updatedCurrentUser.value!.friends, 'friendId'),
+        };
+
+        // TO DO REFACTOR
+        const updatedTargetFriendDTO: WithId<UserDTO> = {
+          _id: updatedTargetFriend.value!._id,
+          sub: updatedTargetFriend.value!.sub,
+          email: updatedTargetFriend.value!.email,
+          emailVerified: updatedTargetFriend.value!.emailVerified,
+          name: updatedTargetFriend.value!.name,
+          avatar: updatedTargetFriend.value!.avatar,
+          givenName: updatedTargetFriend.value!.givenName,
+          familyName: updatedTargetFriend.value!.familyName,
+          locale: updatedTargetFriend.value!.locale,
+          username: updatedTargetFriend.value!.username,
+          discriminator: updatedTargetFriend.value!.discriminator,
+          registerTime: updatedTargetFriend.value!.registerTime,
+          joinedGroupPrivateChannels:
+            updatedTargetFriend.value!.joinedGroupPrivateChannels,
+          friends: arrayToObject(
+            updatedTargetFriend.value!.friends,
+            'friendId'
+          ),
+        };
+
         currentUserFriendResponse = {
-          _id: targetFriend._id,
+          _id: targetFriendDTO._id,
           friendshipStatus: FriendshipEnum.Friend,
           privateChannelId:
-            updatedCurrentUser.value!.friends[
-              targetFriend._id.toString()
+            updatedCurrentUserDTO.friends[
+              targetFriendDTO._id.toString()
             ].privateChannelId?.toString(),
-          avatar: targetFriend.avatar,
-          username: targetFriend.username,
-          discriminator: targetFriend.discriminator,
+          avatar: targetFriendDTO.avatar,
+          username: targetFriendDTO.username,
+          discriminator: targetFriendDTO.discriminator,
         };
 
         targetFriendResponse = {
           _id: currentUser._id,
           friendshipStatus: FriendshipEnum.Friend,
           privateChannelId:
-            updatedTargetFriend.value!.friends[
+            updatedTargetFriendDTO.friends[
               currentUser._id.toString()
             ].privateChannelId?.toString(),
           avatar: currentUser.avatar,
@@ -673,13 +801,12 @@ router.put(
         const currentUserUpdateResult = await collections.users!.updateOne(
           {
             _id: currentUser._id,
+            'friends.friendId': targetFriendDTO._id,
           },
           {
             $set: {
-              [`friends.${targetFriend._id.toString()}.friendId`]:
-                targetFriend._id,
-              [`friends.${targetFriend._id.toString()}.friendshipStatus`]:
-                FriendshipEnum.Blocked,
+              'friends.$.friendId': targetFriendDTO._id,
+              'friends.$.friendshipStatus': FriendshipEnum.Blocked,
             },
           }
         );
@@ -696,12 +823,13 @@ router.put(
         ) {
           const friendUpdateResult = await collections.users!.updateOne(
             {
-              _id: targetFriend._id,
+              _id: targetFriendDTO._id,
+              'friends.friendId': currentUser._id,
             },
             {
               $set: {
-                [`friends.${currentUser._id.toString()}.friendshipStatus`]:
-                  null,
+                'friends.$.friendId': currentUser._id,
+                'friends.$.friendshipStatus': null,
               },
             }
           );
@@ -723,12 +851,12 @@ router.put(
         }
 
         currentUserFriendResponse = {
-          _id: targetFriend._id,
+          _id: targetFriendDTO._id,
           friendshipStatus: FriendshipEnum.Blocked,
           privateChannelId: userFriendship.privateChannelId?.toString(),
-          avatar: targetFriend.avatar,
-          username: targetFriend.username,
-          discriminator: targetFriend.discriminator,
+          avatar: targetFriendDTO.avatar,
+          username: targetFriendDTO.username,
+          discriminator: targetFriendDTO.discriminator,
         };
       }
     } catch (e) {
@@ -795,16 +923,35 @@ router.delete(
     }
 
     try {
-      const targetFriend = await collections.users!.findOne({
+      const targetFriendModel = await collections.users!.findOne({
         username: username,
         discriminator: parseInt(discriminator),
       });
 
-      if (!targetFriend) {
+      if (!targetFriendModel) {
         return res.status(httpConstants.HTTP_STATUS_NOT_FOUND).json({
           message: 'User not found',
         });
       }
+
+      // TO DO REFACTOR
+      const targetFriend: WithId<UserDTO> = {
+        _id: targetFriendModel._id,
+        sub: targetFriendModel.sub,
+        email: targetFriendModel.email,
+        emailVerified: targetFriendModel.emailVerified,
+        name: targetFriendModel.name,
+        avatar: targetFriendModel.avatar,
+        givenName: targetFriendModel.givenName,
+        familyName: targetFriendModel.familyName,
+        locale: targetFriendModel.locale,
+        username: targetFriendModel.username,
+        discriminator: targetFriendModel.discriminator,
+        registerTime: targetFriendModel.registerTime,
+        joinedGroupPrivateChannels:
+          targetFriendModel.joinedGroupPrivateChannels,
+        friends: arrayToObject(targetFriendModel.friends, 'friendId'),
+      };
 
       returnId = targetFriend._id.toString();
 
@@ -825,10 +972,12 @@ router.delete(
         const friendUpdateResult = await collections.users!.updateOne(
           {
             _id: targetFriend._id,
+            'friends.friendId': currentUser._id,
           },
           {
             $set: {
-              [`friends.${currentUser._id.toString()}.friendshipStatus`]: null,
+              'friends.$.friendId': currentUser._id,
+              'friends.$.friendshipStatus': null,
             },
           }
         );
@@ -879,10 +1028,12 @@ router.delete(
         const friendUpdateResult = await collections.users!.updateOne(
           {
             _id: targetFriend._id,
+            'friends.friendId': currentUser._id,
           },
           {
             $set: {
-              [`friends.${currentUser._id.toString()}.friendshipStatus`]: null,
+              'friends.$.friendId': currentUser._id,
+              'friends.$.friendshipStatus': null,
             },
           }
         );
@@ -906,10 +1057,12 @@ router.delete(
       const currentUserUpdateResult = await collections.users!.updateOne(
         {
           _id: currentUser._id,
+          'friends.friendId': targetFriend._id,
         },
         {
           $set: {
-            [`friends.${targetFriend._id.toString()}.friendshipStatus`]: null,
+            'friends.$.friendId': targetFriend._id,
+            'friends.$.friendshipStatus': null,
           },
         }
       );

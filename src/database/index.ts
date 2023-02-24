@@ -1,9 +1,9 @@
 import * as mongoDB from 'mongodb';
 import 'dotenv/config';
-import { User, PrivateChannel, ChatBucket } from './schema';
+import { UserModel, PrivateChannel, ChatBucket } from './schema';
 
 export const collections: {
-  users?: mongoDB.Collection<User>;
+  users?: mongoDB.Collection<UserModel>;
   privateChannels?: mongoDB.Collection<PrivateChannel>;
   chatBuckets?: mongoDB.Collection<ChatBucket>;
 } = {};
@@ -34,7 +34,7 @@ export async function connectToDatabase() {
   const client = new mongoDB.MongoClient(mongoDBUri);
   await client.connect();
   const db = client.db(mongoDBName);
-  const usersCollection = db.collection<User>(usersCollectionName);
+  const usersCollection = db.collection<UserModel>(usersCollectionName);
   const privateChannelsCollection = db.collection<PrivateChannel>(
     privateChannelsCollectionName
   );

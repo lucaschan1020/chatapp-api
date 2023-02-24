@@ -6,7 +6,7 @@ import {
   Friend,
   FriendshipEnum,
   PrivateChannel,
-  User,
+  UserDTO,
 } from '../database/schema';
 import Authorize, {
   AuthorizedResponse,
@@ -14,6 +14,7 @@ import Authorize, {
 import { emitNewPrivateChannel, emitUpdateFriendshipStatus } from '../socketIO';
 import isDuplicateExist from '../utilities/isDuplicateExist';
 import isValidObjectId from '../utilities/isValidObjectId';
+import { arrayToObject } from '../utilities/objectArrayConverter';
 import { FriendResponse } from './friend';
 
 const router = express.Router();
@@ -50,7 +51,7 @@ router.get(
     const currentUser = res.locals.currentUser;
     const privateChannelId = req.params.privateChannelId;
     let privateChannelResult: WithId<PrivateChannel> | null = null;
-    let participantResult: WithId<User>[] = [];
+    let participantResultDTO: WithId<UserDTO>[] = [];
 
     if (!privateChannelId) {
       return res.status(httpConstants.HTTP_STATUS_BAD_REQUEST).json({
@@ -102,28 +103,67 @@ router.get(
           });
         }
 
-        const friendResult = await collections.users!.findOne({
+        const friendResultModel = await collections.users!.findOne({
           _id: userFriendship.friendId,
         });
 
-        if (!friendResult) {
+        if (!friendResultModel) {
           return res.status(httpConstants.HTTP_STATUS_NOT_FOUND).json({
             message: 'Fail to find participants details',
           });
         }
 
-        participantResult = [friendResult];
+        // TO DO REFACTOR
+        const friendResultDTO: WithId<UserDTO> = {
+          _id: friendResultModel._id,
+          sub: friendResultModel.sub,
+          email: friendResultModel.email,
+          emailVerified: friendResultModel.emailVerified,
+          name: friendResultModel.name,
+          avatar: friendResultModel.avatar,
+          givenName: friendResultModel.givenName,
+          familyName: friendResultModel.familyName,
+          locale: friendResultModel.locale,
+          username: friendResultModel.username,
+          discriminator: friendResultModel.discriminator,
+          registerTime: friendResultModel.registerTime,
+          joinedGroupPrivateChannels:
+            friendResultModel.joinedGroupPrivateChannels,
+          friends: arrayToObject(friendResultModel.friends, 'friendId'),
+        };
+
+        participantResultDTO = [friendResultDTO];
       } else {
-        participantResult = await collections
+        const participantResultModel = await collections
           .users!.find({
             joinedGroupPrivateChannels: {
-              $in: new ObjectId(privateChannelId),
+              $in: [new ObjectId(privateChannelId)],
             },
             _id: {
               $ne: currentUser._id,
             },
           })
           .toArray();
+
+        // TO DO REFACTOR
+        participantResultDTO = participantResultModel.map((participant) => {
+          return {
+            _id: participant._id,
+            sub: participant.sub,
+            email: participant.email,
+            emailVerified: participant.emailVerified,
+            name: participant.name,
+            avatar: participant.avatar,
+            givenName: participant.givenName,
+            familyName: participant.familyName,
+            locale: participant.locale,
+            username: participant.username,
+            discriminator: participant.discriminator,
+            registerTime: participant.registerTime,
+            joinedGroupPrivateChannels: participant.joinedGroupPrivateChannels,
+            friends: arrayToObject(participant.friends, 'friendId'),
+          };
+        });
       }
     } catch (e) {
       console.log(e);
@@ -134,7 +174,7 @@ router.get(
 
     const privateChannelResponse: Partial<WithId<PrivateChannelResponse>> = {
       _id: privateChannelResult._id,
-      participants: participantResult.map((participant) => ({
+      participants: participantResultDTO.map((participant) => ({
         _id: participant._id.toString(),
         avatar: participant.avatar,
         username: participant.username,
@@ -173,8 +213,8 @@ router.get(
     );
 
     let privateChannelResult: WithId<PrivateChannel>[];
-    let friendResult: WithId<User>[];
-    let groupFriendResult: WithId<User>[];
+    let friendResultDTO: WithId<UserDTO>[];
+    let groupFriendResultDTO: WithId<UserDTO>[];
 
     try {
       privateChannelResult = await collections
@@ -185,7 +225,7 @@ router.get(
         })
         .toArray();
 
-      friendResult = await collections
+      const friendResultModel = await collections
         .users!.find({
           _id: {
             $in: activeFriendIds,
@@ -193,7 +233,7 @@ router.get(
         })
         .toArray();
 
-      groupFriendResult = await collections
+      const groupFriendResultModel = await collections
         .users!.find({
           joinedGroupPrivateChannels: {
             $in: joinedGroupPrivateChannels,
@@ -203,6 +243,46 @@ router.get(
           },
         })
         .toArray();
+
+      // TO DO REFACTOR
+      friendResultDTO = friendResultModel.map((friend) => {
+        return {
+          _id: friend._id,
+          sub: friend.sub,
+          email: friend.email,
+          emailVerified: friend.emailVerified,
+          name: friend.name,
+          avatar: friend.avatar,
+          givenName: friend.givenName,
+          familyName: friend.familyName,
+          locale: friend.locale,
+          username: friend.username,
+          discriminator: friend.discriminator,
+          registerTime: friend.registerTime,
+          joinedGroupPrivateChannels: friend.joinedGroupPrivateChannels,
+          friends: arrayToObject(friend.friends, 'friendId'),
+        };
+      });
+
+      // TO DO REFACTOR
+      groupFriendResultDTO = groupFriendResultModel.map((friend) => {
+        return {
+          _id: friend._id,
+          sub: friend.sub,
+          email: friend.email,
+          emailVerified: friend.emailVerified,
+          name: friend.name,
+          avatar: friend.avatar,
+          givenName: friend.givenName,
+          familyName: friend.familyName,
+          locale: friend.locale,
+          username: friend.username,
+          discriminator: friend.discriminator,
+          registerTime: friend.registerTime,
+          joinedGroupPrivateChannels: friend.joinedGroupPrivateChannels,
+          friends: arrayToObject(friend.friends, 'friendId'),
+        };
+      });
     } catch (e) {
       console.log(e);
       return res.status(httpConstants.HTTP_STATUS_INTERNAL_SERVER_ERROR).json({
@@ -225,7 +305,7 @@ router.get(
         })
     );
 
-    friendResult.forEach((friend) => {
+    friendResultDTO.forEach((friend) => {
       const friendship = friends[friend._id.toString()];
       privateChannelResponse[friendship.privateChannelId!.toString()] = {
         ...privateChannelResponse[friendship.privateChannelId!.toString()],
@@ -241,7 +321,7 @@ router.get(
     });
 
     joinedGroupPrivateChannels.forEach((privateChannel) => {
-      const participants = groupFriendResult
+      const participants = groupFriendResultDTO
         .filter(({ joinedGroupPrivateChannels }) =>
           joinedGroupPrivateChannels.some((friendPrivateChannel) =>
             friendPrivateChannel.equals(privateChannel)
@@ -273,7 +353,7 @@ router.post(
     const currentUser = res.locals.currentUser;
     const { participants, privateChannelName = '' } = req.body;
     let privateChannelResult: WithId<PrivateChannel> | null;
-    let participantsResult: WithId<User>[];
+    let participantsResultDTO: WithId<UserDTO>[];
     let currentUserFriendResponse: WithId<FriendResponse> | null = null;
     let targetFriendResponse: WithId<FriendResponse> | null = null;
     if (!participants) {
@@ -368,81 +448,102 @@ router.post(
       if (!isGroup) {
         const friendId = participants[0];
 
-        const updatedTargetFriend = await collections.users!.findOneAndUpdate(
-          { _id: new ObjectId(friendId) },
-          [
+        const updatedTargetFriendModel =
+          await collections.users!.findOneAndUpdate(
+            {
+              _id: new ObjectId(friendId),
+              'friends.friendId': currentUser._id,
+            },
             {
               $set: {
-                [`friends.${currentUser._id.toString()}.privateChannelId`]:
-                  newPrivateChannel.insertedId,
-                [`friends.${currentUser._id.toString()}.friendId`]:
-                  currentUser._id,
-                [`friends.${currentUser._id.toString()}.friendshipStatus`]: {
-                  $cond: [
-                    {
-                      $not: [
-                        `$friends.${currentUser._id.toString()}.friendshipStatus`,
-                      ],
-                    },
-                    null,
-                    `$friends.${currentUser._id.toString()}.friendshipStatus`,
-                  ],
-                },
+                'friends.$.friendId': currentUser._id,
+                'friends.$.friendshipStatus': newPrivateChannel.insertedId,
               },
             },
-          ],
-          {
-            returnDocument: 'after',
-          }
-        );
+            {
+              returnDocument: 'after',
+            }
+          );
 
-        const updatedCurrentUser = await collections.users!.findOneAndUpdate(
-          { _id: currentUser._id },
-          [
+        const updatedCurrentUserModel =
+          await collections.users!.findOneAndUpdate(
+            { _id: currentUser._id, 'friends.friendId': friendId },
             {
               $set: {
-                [`friends.${friendId}.privateChannelId`]:
-                  newPrivateChannel.insertedId,
-                [`friends.${friendId}.friendId`]: new ObjectId(friendId),
-                [`friends.${friendId}.friendshipStatus`]: {
-                  $cond: [
-                    {
-                      $not: [`$friends.${friendId}.friendshipStatus`],
-                    },
-                    null,
-                    `$friends.${friendId}.friendshipStatus`,
-                  ],
-                },
-                [`friends.${friendId}.active`]: true,
+                'friends.$.friendId': new ObjectId(friendId),
+                'friends.$.friendshipStatus': newPrivateChannel.insertedId,
+                'friends.$.active': true,
               },
             },
-          ],
-          {
-            returnDocument: 'after',
-          }
-        );
+            {
+              returnDocument: 'after',
+            }
+          );
+
+        // TO DO REFACTOR
+        const updatedTargetFriendDTO: WithId<UserDTO> = {
+          _id: updatedTargetFriendModel.value!._id,
+          sub: updatedTargetFriendModel.value!.sub,
+          email: updatedTargetFriendModel.value!.email,
+          emailVerified: updatedTargetFriendModel.value!.emailVerified,
+          name: updatedTargetFriendModel.value!.name,
+          avatar: updatedTargetFriendModel.value!.avatar,
+          givenName: updatedTargetFriendModel.value!.givenName,
+          familyName: updatedTargetFriendModel.value!.familyName,
+          locale: updatedTargetFriendModel.value!.locale,
+          username: updatedTargetFriendModel.value!.username,
+          discriminator: updatedTargetFriendModel.value!.discriminator,
+          registerTime: updatedTargetFriendModel.value!.registerTime,
+          joinedGroupPrivateChannels:
+            updatedTargetFriendModel.value!.joinedGroupPrivateChannels,
+          friends: arrayToObject(
+            updatedTargetFriendModel.value!.friends,
+            'friendId'
+          ),
+        };
+
+        // TO DO REFACTOR
+        const updatedCurrentUserDTO: WithId<UserDTO> = {
+          _id: updatedCurrentUserModel.value!._id,
+          sub: updatedCurrentUserModel.value!.sub,
+          email: updatedCurrentUserModel.value!.email,
+          emailVerified: updatedCurrentUserModel.value!.emailVerified,
+          name: updatedCurrentUserModel.value!.name,
+          avatar: updatedCurrentUserModel.value!.avatar,
+          givenName: updatedCurrentUserModel.value!.givenName,
+          familyName: updatedCurrentUserModel.value!.familyName,
+          locale: updatedCurrentUserModel.value!.locale,
+          username: updatedCurrentUserModel.value!.username,
+          discriminator: updatedCurrentUserModel.value!.discriminator,
+          registerTime: updatedCurrentUserModel.value!.registerTime,
+          joinedGroupPrivateChannels:
+            updatedCurrentUserModel.value!.joinedGroupPrivateChannels,
+          friends: arrayToObject(
+            updatedCurrentUserModel.value!.friends,
+            'friendId'
+          ),
+        };
 
         currentUserFriendResponse = {
           _id: new ObjectId(friendId),
           friendshipStatus:
-            updatedCurrentUser.value!.friends[friendId].friendshipStatus ??
-            null,
+            updatedCurrentUserDTO.friends[friendId].friendshipStatus ?? null,
           privateChannelId:
-            updatedCurrentUser.value!.friends[
+            updatedCurrentUserDTO.friends[
               friendId
             ].privateChannelId?.toString(),
-          avatar: updatedTargetFriend.value!.avatar,
-          username: updatedTargetFriend.value!.username,
-          discriminator: updatedTargetFriend.value!.discriminator,
+          avatar: updatedCurrentUserDTO.avatar,
+          username: updatedCurrentUserDTO.username,
+          discriminator: updatedCurrentUserDTO.discriminator,
         };
 
         targetFriendResponse = {
           _id: currentUser._id,
           friendshipStatus:
-            updatedTargetFriend.value!.friends[currentUser._id.toString()]
+            updatedTargetFriendDTO.friends[currentUser._id.toString()]
               .friendshipStatus ?? null,
           privateChannelId:
-            updatedTargetFriend.value!.friends[
+            updatedTargetFriendDTO.friends[
               currentUser._id.toString()
             ].privateChannelId?.toString(),
           avatar: currentUser.avatar,
@@ -467,7 +568,7 @@ router.post(
         );
       }
 
-      participantsResult = await collections
+      const participantsResultModel = await collections
         .users!.find({
           _id: {
             $in: [
@@ -489,6 +590,26 @@ router.post(
             message: 'Something went wrong',
           });
       }
+
+      // TO DO REFACTOR
+      participantsResultDTO = participantsResultModel.map((participant) => {
+        return {
+          _id: participant._id,
+          sub: participant.sub,
+          email: participant.email,
+          emailVerified: participant.emailVerified,
+          name: participant.name,
+          avatar: participant.avatar,
+          givenName: participant.givenName,
+          familyName: participant.familyName,
+          locale: participant.locale,
+          username: participant.username,
+          discriminator: participant.discriminator,
+          registerTime: participant.registerTime,
+          joinedGroupPrivateChannels: participant.joinedGroupPrivateChannels,
+          friends: arrayToObject(participant.friends, 'friendId'),
+        };
+      });
     } catch (e) {
       console.log(e);
       return res.status(httpConstants.HTTP_STATUS_INTERNAL_SERVER_ERROR).json({
@@ -498,7 +619,7 @@ router.post(
 
     const privateChannelResponse: WithId<PrivateChannelResponse> = {
       _id: privateChannelResult._id,
-      participants: participantsResult.map((participant) => ({
+      participants: participantsResultDTO.map((participant) => ({
         _id: participant._id.toString(),
         avatar: participant.avatar,
         username: participant.username,
@@ -518,7 +639,7 @@ router.post(
     }
 
     emitNewPrivateChannel(
-      participantsResult.map((participant) => participant._id),
+      participantsResultDTO.map((participant) => participant._id),
       privateChannelResponse
     );
 

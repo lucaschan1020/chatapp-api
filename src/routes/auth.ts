@@ -5,10 +5,11 @@ import { constants as httpConstants } from 'http2';
 import { InsertOneResult, WithId } from 'mongodb';
 import gapiVerifyToken from '../auth';
 import { collections } from '../database';
-import { User } from '../database/schema';
+import { UserDTO, UserModel } from '../database/schema';
 import Authorize, {
   AuthorizedResponse,
 } from '../middleware/authorization-middleware';
+import { arrayToObject } from '../utilities/objectArrayConverter';
 
 const router = express.Router();
 
@@ -31,7 +32,7 @@ router.post('/login', async (req: LoginRequest, res: express.Response) => {
       message: 'Invalid token',
     });
   }
-  let result: WithId<User> | InsertOneResult<User> | null = null;
+  let result: WithId<UserModel> | InsertOneResult<UserModel> | null = null;
   try {
     result = await collections.users!.findOne(
       { sub: decodedToken.sub },
@@ -39,7 +40,24 @@ router.post('/login', async (req: LoginRequest, res: express.Response) => {
     );
 
     if (result) {
-      return res.status(httpConstants.HTTP_STATUS_OK).json(result);
+      // TO DO REFACTOR
+      const resultDTO: WithId<UserDTO> = {
+        _id: result._id,
+        sub: result.sub,
+        email: result.email,
+        emailVerified: result.emailVerified,
+        name: result.name,
+        avatar: result.avatar,
+        givenName: result.givenName,
+        familyName: result.familyName,
+        locale: result.locale,
+        username: result.username,
+        discriminator: result.discriminator,
+        registerTime: result.registerTime,
+        joinedGroupPrivateChannels: result.joinedGroupPrivateChannels,
+        friends: arrayToObject(result.friends, 'friendId'),
+      };
+      return res.status(httpConstants.HTTP_STATUS_OK).json(resultDTO);
     }
 
     let toBeDiscriminator: number = 0;
@@ -76,7 +94,7 @@ router.post('/login', async (req: LoginRequest, res: express.Response) => {
       username: decodedToken.name!,
       discriminator: toBeDiscriminator,
       registerTime: new Date(),
-      friends: {},
+      friends: [],
       joinedGroupPrivateChannels: [],
     });
 
@@ -84,13 +102,37 @@ router.post('/login', async (req: LoginRequest, res: express.Response) => {
       { _id: result.insertedId },
       { projection: { registerTime: 0 } }
     );
+
+    if (!result) {
+      return res.status(httpConstants.HTTP_STATUS_INTERNAL_SERVER_ERROR).json({
+        message: 'Something went wrong',
+      });
+    }
   } catch (e) {
     console.log(e);
     return res.status(httpConstants.HTTP_STATUS_INTERNAL_SERVER_ERROR).json({
       message: 'Something went wrong',
     });
   }
-  return res.status(httpConstants.HTTP_STATUS_CREATED).json(result);
+
+  // TO DO REFACTOR
+  const resultDTO: WithId<UserDTO> = {
+    _id: result._id,
+    sub: result.sub,
+    email: result.email,
+    emailVerified: result.emailVerified,
+    name: result.name,
+    avatar: result.avatar,
+    givenName: result.givenName,
+    familyName: result.familyName,
+    locale: result.locale,
+    username: result.username,
+    discriminator: result.discriminator,
+    registerTime: result.registerTime,
+    joinedGroupPrivateChannels: result.joinedGroupPrivateChannels,
+    friends: arrayToObject(result.friends, 'friendId'),
+  };
+  return res.status(httpConstants.HTTP_STATUS_CREATED).json(resultDTO);
 });
 
 router.get(

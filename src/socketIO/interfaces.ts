@@ -1,5 +1,5 @@
 import { WithId } from 'mongodb';
-import { User } from '../database/schema';
+import { UserModel } from '../database/schema';
 import { PrivateChannelChatResponse } from '../routes/chat';
 import { FriendResponse } from '../routes/friend';
 import { PrivateChannelResponse } from '../routes/privateChannel';
@@ -16,7 +16,7 @@ interface InterServerEvents {}
 
 interface SocketData {
   authToken: string;
-  currentUser: WithId<User>;
+  currentUser: WithId<UserModel>;
 }
 
 export {
