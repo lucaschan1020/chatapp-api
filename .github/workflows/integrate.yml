@@ -2,12 +2,11 @@ name: ci
 
 on:
   push:
-    branches: ['release']
+    branches: ['master']
     tags:
       - 'v*'
   pull_request:
-    branches:
-      - 'master'
+    branches: ['master']
 
 env:
   REGISTRY: ghcr.io
