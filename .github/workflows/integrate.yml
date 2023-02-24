@@ -1,0 +1,16 @@
+name: Continuous Integration
+
+on:
+  pull_request:
+    branches: ['master']
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v4
+      - name: Docker Build
+      - run: docker build -t chatapp-api .

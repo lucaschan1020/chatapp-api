@@ -28,7 +28,7 @@ connectToDatabase()
     });
 
     server.listen(process.env.PORT || serverPort, function () {
-      console.log(`listening on *:${process.env.PORT || serverPort}`);
+      console.log(1`listening on *:${process.env.PORT || serverPort}`);
     });
   })
   .catch((error: Error) => {
