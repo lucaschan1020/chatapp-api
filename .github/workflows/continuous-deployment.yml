@@ -1,12 +1,10 @@
-name: ci
+name: continuous-deployment
 
 on:
   push:
     branches: ['master']
     tags:
       - 'v*'
-  pull_request:
-    branches: ['master']
 
 env:
   REGISTRY: ghcr.io
@@ -18,14 +16,11 @@ jobs:
     permissions:
       contents: read
       packages: write
-      # This is used to complete the identity challenge
-      # with sigstore/fulcio when running outside of PRs.
-      id-token: write
+      id-token: read
     steps:
       - name: Checkout
         uses: actions/checkout@v3
       - name: Log in to the Container registry
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
         with:
           registry: ${{ env.REGISTRY }}
@@ -45,6 +40,7 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: .
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true
+          platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

@@ -7,7 +7,8 @@
     "dev": "nodemon ./src/app.ts",
     "clean": "ts-node ./src/data-cleaning/clean.ts",
     "build": "tsc",
-    "start": "node ./app.js"
+    "start": "node ./app.js",
+    "test": "echo \"No test specified\" && exit 0"
   },
   "keywords": [],
   "author": "",
