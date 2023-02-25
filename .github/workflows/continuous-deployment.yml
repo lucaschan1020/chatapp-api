@@ -2,6 +2,7 @@ name: continuous-deployment
 
 on:
   release:
+    types: [published]
     branches: ['master']
     tags:
       - 'v*'
