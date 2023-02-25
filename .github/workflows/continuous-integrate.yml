@@ -1,36 +1,22 @@
-name: ci
+name: continuos-integration
 
 on:
-  push:
-    branches: ['master']
-    tags:
-      - 'v*'
   pull_request:
     branches: ['master']
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  TEST_TAG: ${{ github.repository }}:test
 
 jobs:
   docker:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
-      # This is used to complete the identity challenge
-      # with sigstore/fulcio when running outside of PRs.
-      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      - name: Log in to the Container registry
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v4
@@ -47,4 +33,8 @@ jobs:
           context: .
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          load: true
+      - name: Output Tags ${{ steps.meta.outputs.tags }}
+      - name: Test_Tag ${{ env.TEST_TAG }}
+        run: |
+          docker run --rm ${{ steps.meta.outputs.tags }} npm run test
