@@ -5,9 +5,7 @@ on:
     branches: ['master']
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
-  TEST_TAG: ${{ github.repository }}:test
+  IMAGE_TAG: ghcr.io/${{ github.repository }}:ci-test
 
 jobs:
   docker:
@@ -17,26 +15,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@v4
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-      - name: Build and push
+      - name: Build image
         uses: docker/build-push-action@v4
         with:
           context: .
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          load: true
-      - name: Test Tag ${{ env.TEST_TAG }}
+          push: false
+          tags: ${{ env.IMAGE_TAG }}
+      - name: Run tests
         run: |
-          echo ${{ env.TEST_TAG }}
-      - name: Output Tags ${{ steps.meta.outputs.tags }}
-        run: |
-          docker run --rm ${{ steps.meta.outputs.tags }} npm run test
+          docker run --rm ${{ env.IMAGE_TAG }} npm run test
