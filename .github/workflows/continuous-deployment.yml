@@ -65,4 +65,4 @@ jobs:
       - name: Deploy to Google Kubernetes Engine
         run: |
           kubectl apply -f ./k8s
-          kubectl set image deployment/chatapp-api-deployment chatapp-api=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tags }}
+          kubectl set image deployment/chatapp-api-deployment chatapp-api=${{ steps.meta.outputs.tags }}
