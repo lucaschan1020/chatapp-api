@@ -17,6 +17,12 @@ connectToDatabase()
     app.use(express.json());
     initializeSocketIO(server);
 
+    app.get('/api/readyz', (_req, res) =>
+      res.status(200).json({ status: 'ok' })
+    );
+    app.get('/api/livez', (_req, res) =>
+      res.status(200).json({ status: 'ok' })
+    );
     app.use('/', express.static(__dirname + '/public'));
 
     app.use('/api/auth', authRoutes);
