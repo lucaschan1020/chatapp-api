@@ -32,3 +32,15 @@ spec:
                   key: MONGO_DBURI
             - name: MONGODB_NAME
               value: ChatAppDev
+          readinessProbe:
+            httpGet:
+              path: /api/readyz
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /api/livez
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 5
