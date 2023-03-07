@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import * as dotenv from 'dotenv';
 import express from 'express';
 import http from 'http';
 import path from 'path';
@@ -8,6 +8,8 @@ import chatRoutes from './routes/chat';
 import friendRoutes from './routes/friend';
 import privateChannelRoutes from './routes/privateChannel';
 import { initializeSocketIO } from './socketIO';
+
+dotenv.config();
 
 const app = express();
 const server = new http.Server(app);

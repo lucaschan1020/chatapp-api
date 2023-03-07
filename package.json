@@ -4,7 +4,7 @@
   "description": "",
   "main": "app.ts",
   "scripts": {
-    "dev": "nodemon ./src/app.ts",
+    "dev": "NODE_ENV=development nodemon ./src/app.ts",
     "clean": "ts-node ./src/data-cleaning/clean.ts",
     "build": "tsc",
     "start": "node ./app.js",
