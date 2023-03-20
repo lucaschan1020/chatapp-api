@@ -1,19 +1,16 @@
-import * as dotenv from 'dotenv';
 import express from 'express';
 import http from 'http';
-import path from 'path';
-import { connectToDatabase } from './database';
-import authRoutes from './routes/auth';
-import chatRoutes from './routes/chat';
-import friendRoutes from './routes/friend';
-import privateChannelRoutes from './routes/privateChannel';
-import { initializeSocketIO } from './socketIO';
-
-dotenv.config();
+import authRoutes from './components/auth/auth.route';
+import chatRoutes from './components/chat/chat.route';
+import friendRoutes from './components/friend/friend.route';
+import privateChannelRoutes from './components/private-channel/private-channel.route';
+import { PORT } from './config/env-keys';
+import { connectToDatabase } from './infrastructure/database';
+import { initializeSocketIO } from './infrastructure/socket-io';
+import errorHandlerMiddleware from './middleware/error-handler.middleware-maker';
 
 const app = express();
 const server = new http.Server(app);
-const serverPort: number = 5000;
 connectToDatabase()
   .then(() => {
     app.use(express.json());
@@ -25,18 +22,16 @@ connectToDatabase()
     app.get('/api/livez', (_req, res) =>
       res.status(200).json({ status: 'ok' })
     );
-    app.use('/', express.static(__dirname + '/public'));
 
     app.use('/api/auth', authRoutes);
     app.use('/api/friend', friendRoutes);
-    app.use('/api/privateChannel', privateChannelRoutes);
+    app.use('/api/private-channel', privateChannelRoutes);
     app.use('/api/chat', chatRoutes);
-    app.get('*', function (_req, res) {
-      res.sendFile(path.resolve(__dirname, './public/index.html'));
-    });
 
-    server.listen(process.env.PORT || serverPort, function () {
-      console.log(`listening on *:${process.env.PORT || serverPort}`);
+    app.use(errorHandlerMiddleware.handleError);
+
+    server.listen(PORT, function () {
+      console.log(`listening on *:${PORT}`);
     });
   })
   .catch((error: Error) => {
