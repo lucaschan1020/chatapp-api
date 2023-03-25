@@ -12,13 +12,13 @@ router.get(
 );
 
 router.get(
-  '',
+  '/private',
   authenticationMiddleware.Authenticate,
   tryCatch(privateChannelController.getAll)
 );
 
 router.post(
-  '',
+  '/private',
   authenticationMiddleware.Authenticate,
   tryCatch(privateChannelController.post)
 );

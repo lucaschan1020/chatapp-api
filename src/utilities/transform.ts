@@ -34,16 +34,16 @@ const transformUserResponse = (model: UserDto): UserResponse => {
 };
 
 const transformFriendResponse = (
-  userFriendship: FriendDto,
+  userFriendship: FriendDto | undefined,
   friendInfo: UserDto
 ): FriendResponse => {
   return {
     friendId: friendInfo.id,
     friendshipStatus:
-      userFriendship.friendshipStatus !== undefined
+      userFriendship?.friendshipStatus !== undefined
         ? userFriendship.friendshipStatus
         : null,
-    privateChannelId: userFriendship.privateChannelId,
+    privateChannelId: userFriendship?.privateChannelId,
     avatar: friendInfo.avatar,
     username: friendInfo.username,
     discriminator: friendInfo.discriminator,
