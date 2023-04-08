@@ -163,7 +163,7 @@ class ChatService implements IChatService {
       });
 
       chatMessage = chatBucket.chatMessages.at(-1)!;
-    } else if (chatBucket.chatMessages.length > 50) {
+    } else if (chatBucket.chatMessages.length >= 50) {
       // need to fix race condition
       chatBucket = await this.chatRepository.insert({
         channelId: channelId,

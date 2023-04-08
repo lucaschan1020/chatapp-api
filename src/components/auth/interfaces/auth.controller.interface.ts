@@ -1,9 +1,9 @@
 import express from 'express';
 import { AuthorizedResponse } from '../../../middleware/interfaces/authentication.middleware.interface';
 
-type LoginRequest = express.Request & {
+interface LoginRequest extends express.Request {
   body: { userToken: string };
-};
+}
 
 interface IAuthController {
   post(req: LoginRequest, res: express.Response): Promise<void>;
