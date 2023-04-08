@@ -1,7 +1,9 @@
 import express from 'express';
 import { UserDto } from '../../infrastructure/database/schema';
 
-type AuthorizedLocal = { currentUser: UserDto };
+interface AuthorizedLocal {
+  currentUser: UserDto;
+}
 type AuthorizedResponse = express.Response<any, AuthorizedLocal>;
 
 interface IAuthenticationMiddleware {

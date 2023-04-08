@@ -40,12 +40,12 @@ interface FriendModel {
   active?: boolean;
 }
 
-type FriendDto = {
+interface FriendDto {
   friendId: string;
   friendshipStatus?: FriendshipEnum | null;
   privateChannelId?: string;
   active?: boolean;
-};
+}
 
 enum FriendshipEnum {
   // user is the one who sent the friend request

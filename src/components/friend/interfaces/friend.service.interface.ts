@@ -4,14 +4,14 @@ import {
 } from '../../../infrastructure/database/schema';
 import { AppError } from '../../../middleware/interfaces/error-handler.middleware.interface';
 
-type FriendResponse = {
+interface FriendResponse {
   friendId: string;
   friendshipStatus: FriendshipEnum | null;
   privateChannelId?: string;
   avatar: string;
   username: string;
   discriminator: number;
-};
+}
 
 interface IFriendService {
   getAllFriends(user: UserDto): Promise<Record<string, FriendResponse>>;
